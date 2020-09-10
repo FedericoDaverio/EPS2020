@@ -1,0 +1,368 @@
+---
+title: "Tarea 1 EPS"
+author: "Federico Daverio"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: united
+    highlight: tango
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Pregunta 1
+
+Suponga que para un experimento en un laboratorio se asignó a un grupo estudiantes a un brazo de tratamiento o a uno de control. Antes de comenzar el experimento se recolectaron una serie de características $x_{ji}, j=1,…5$, de cada estudiante. Se busca medir el efecto del tratamiento sobre una variable de resultados $y_i$.
+
+El investigador A quedó a cargo de comprobar el balance de la asignación del tratamiento y le reporta lo siguiente:
+
+Para verificar que la aleatorización fue exitosa, tomé la serie de variables pre-intervención y la dummy de asignación al tratamiento $T_i$ para correr la siguiente regresión:
+
+$$T_i= \alpha + \sum_{j=1}^5x'_{ji}\beta + \epsilon_i  $$
+_Después realicé una prueba **F** de significancia conjunta sobre los coeficientes $β_j$ que resultó tener un valor $p$ de 0.003._
+
+## Inciso A
+Explique qué interpretación tiene la prueba realizada por el investigador A y qué se esperaría de haberse logrado una aleatorización exitosa del tratamiento?
+
+El investigador A por medio de la regresión propuesta quiere analizar si hay una dependencia entre las variables observadas y la asignación del tratamiento. Esto le permite por lo tanto averiguar si hay un balance entre grupo de control y grupo tratado respeto a las variables observadas. En particular la prueba F conjunta por él propuesta le permite averiguar justamente que no haya diferencias estadísticamente significativas entre los dos brazos del experimento. La hipótesis nula $(H_0)$ de la prueba es que todos los coeficientes de la regresión sean igual a 0 $\beta_1= \beta_2=\beta_3=\beta_4=\beta_5=0$, ósea que todas las características poblacionales no permita prever la asignación del tratamiento y por lo tanto los dos grupos no tienen diferencias estadísticamente  significativas en las características observadas. En caso de aceptar la hipótesis nula, dado un determinado nivel de significancia, podremos afirmar que el brazo tratado y el de control serían balanceados desde el punto de vista de las características observadas. 
+
+## Inciso B
+¿Qué concluye a partir de lo que le reporta el investigador A?
+
+Dado el resultado reportado por el investigador B, donde el F test arrojó un $p-value$ de $0.003$ rechazamos la hipótesis nula por el canónico valor de confianza del 95% (el p-value debería ser > 0.05 para aceptar $H_0$). Eso nos induce pensar que el proceso de aleatorización del tratamiento entre los dos grupos tuvo alguna falla o hay problemas más profundos en el diseño de la investigación.  Sin duda esta prueba no nos dice si todas o solo algunas de estas características son desbalanceadas entre grupo de control y tratado. Por lo tanto, son necesarias ulteriores pruebas para poder entender el origen de esta diferencia entre los dos brazos y, eventualmente, poder corregir. 
+
+## Inciso A.2
+
+El investigador B le reporta lo siguiente:
+
+*Yo realicé un análisis adicional para determinar el balance en la asignación del tratamiento. Para cada una de las características xji corrí la siguiente regresión:*
+
+$$x_{ji}=\gamma + \pi T_i + u_i$$
+*A continuación, le reporto una tabla con los valores $p$ asociados al coeficiente estimado de $\pi$ en cada una de las 5 regresiones.*
+
+Caracteristicas  | Valor $p$
+------------- | -------------
+$x_{1i}$  | 0.0012
+$x_{2i}$  | 0.0312
+$x_{3i}$  | 0.0127
+$x_{4i}$  | 0.0076
+$x_{5i}$  | 0.0902
+
+
+El segundo investigador, consciente que se necesitan ulteriores análisis para mejor entender las diferencias entre el brazo de control y el tratado realiza una regresión lineal para cada una de las características observadas (como variable independiente) y la dummie de asignación al tratamiento. En este caso queremos analizar si es posible a partir de la asignación del tratamiento inferir características poblacionales. Por medio de estas regresiones podemos averiguar para cada característica si hay una diferencia en medias de estas estadísticamente significativa entre el grupo tratada y el de control. Similarmente al caso precedente, en el caso de una aleatorización exitosa, ninguno de los coeficientes de las distintas regresiones tendría que arrojar en el T-test un $p-value$ inferior a 0.05, en caso de que queramos un nivel de significancia del 95%. Analizando los resultados obtenidos en las distintas regresiones notamos que para las primeras 4 rechazamos la hipótesis nula y por lo tanto podemos pensar que hay una diferencia estadísticamente significativa entre las características analizadas del grupo tratado y el de control. Finalmente, la característica número 5 no presenta una diferencia en medias significativa estadísticamente, por lo tanto, podemos suponer que esta característica ha sido distribuida aleatoriamente entre los dos grupos. En caso de una aleatorización exitosa nos habríamos esperado un p-value para todos los coeficientes de las distintas regresiones mayor a 0.05.
+
+## Inciso B.2
+¿Cómo reconcilia la evidencia encontrada por sus asistentes y qué concluye sobre el balance en la asignación del tratamiento? ¿Qué características tendría una diferencia de medias de $y_i$ después del tratamiento como estimador del impacto de este?
+
+No hay contradicción entre los resultados reportados por el investigador A y el investigador B. De facto, el primero reporta que analizando en conjunto los dos brazos del tratamiento podemos encontrar un sesgo de selección en la asignación del tratamiento. El segundo investigador confirmó la hipótesis explorada por el investigador A y nos da más información respecto al sesgo encontrando que por lo menos una característica observada fue correctamente aleatorizada entre los dos grupos, la cinco. Justo esta última característica nos podría ayudar a estimar el impacto del tratamiento, aunque el supuesto de igualdad de medias es significativo solo al 90%. Las otras características no serían útiles para estimar adecuadamente el impacto del tratamiento porque tenemos evidencias que los dos grupos son distintos y esto nos llevaría con toda probabilidad a subestimar o sobrestimar los efectos. 
+
+
+# Pregunta 2
+Suponga que desea evaluar el impacto de las medidas de sana distancia realizadas por el gobierno de un país para reducir la mortalidad causada por el covid-19. Suponga que hubiera tenido la oportunidad implementar un experimento **antes** de que la epidemia se realizara.
+
+## Inciso A
+Describa cómo diseñaría su experimento ideal para responder a esta pregunta.
+
+Para diseñar exitosamente un experimento vuelto a evaluar una política pública o el impacto de un programa social, es necesario antes que todo elaborar una teoría del cambio que describa las hipótesis respecto a cómo el proyecto o la medida implementada impacte sobre la variable, o las variables, de respuesta estudiada.
+
+Inicialmente el virus resultaba desconocido y se tenían pocas informaciones respecto a las modalidades de transmisión, pero con el pasar del tiempo salieron evidencias científicas contundentes que llevaron la organización mundial de la salud a expresarse de esta forma:
+
+*“Según las pruebas existentes, la COVID-19 se transmite de una persona a otra por contacto directo, indirecto (a través de objetos o superficies contaminadas) o cercano con personas infectadas por medio de las secreciones bucales y nasales: la saliva, las secreciones respiratorias o las gotículas de secreciones que se expulsan por la boca o la nariz cuando una persona infectada tose, estornuda, habla o canta, por ejemplo. Las personas que están en contacto cercano (a un metro) con una persona infectada pueden contraer la COVID-19 si esas gotículas infecciosas les entran en la boca, la nariz o los ojos.
+Para evitar el contacto con estas gotículas, es crucial mantenerse al menos a un metro de distancia de los demás, lavarse las manos con frecuencia y cubrirse la boca con un pañuelo o con el interior del codo al estornudar o toser. Cuando no es posible guardar ese distanciamiento físico (estar a un metro o más de distancia), el uso de una mascarilla (cubrebocas, barbijo) de tela es una medida importante para proteger a los demás. También es fundamental lavarse las manos con frecuencia.”* (WHO, 2020)[^3]
+
+A partir de esta información la hipótesis a la base de nuestra teoría del cambio es que por medio de medidas no farmacológicas como la sana distancia se pueda disminuir los contagios y de consecuencia la tasa de mortalidad del COVID-19. Esta idea se basa sobre teorías clásicas de la epidemiologia donde uno de los elementos claves de la difusión de un virus es medido por medio del número reproductivo básico $R_0$, que estima la velocidad con que una enfermedad puede propagarse en una población (Ridenhour, 2014)[^2]. Otro factor que supondremos para el diseño de nuestro experimento es que la tasa de mortalidad sea constante, este es un supuesto débil y confirmado por numerosos estudios. A partir de esto una de las posibilidades para poder disminuir la mortalidad asociada a la enfermedad es justamente disminuir el coeficiente $R_0$ por medios de distintas medidas. 
+
+A partir de la sugerencia de la Organización Mundial de la Salud de “mantenerse al menos a un metro de distancia de los demás” para disminuir la propagación del virus, por medio de nuestro experimento queremos evaluar cuantitativamente como las medidas de sana distancia impactan en la reducción de la mortalidad del virus. Modelamos nuestra teoría del cambio para considerar las relaciones, hasta el momento presuntamente causales, entre las políticas publicas implementadas y la variable objeto de estudio:
+
+![Theory of change](C:/DAVE2/CIDE/3 semestre/eps/1 TAREA/theoryofchange.PNG)
+En nuestro caso, siendo que tenemos la disponibilidad de implementar un experimento ideal, nos gustaría analizar el distinto impacto de diferentes medidas de sana distancia sobre la variable de respuesta y tener así datos relevantes para una decisión de política pública.
+
+Después de haber definido y modelado la teoría del cambio tenemos que elaborar una cadena de resultados que pueda servir como guía para alcanzar los resultados propuestos. Para hacer eso es necesario definir las diferentes medidas de sana distancia que se querrán implementar: como vimos nuestra ambición es poder testar diferentes medidas de distanciamiento social para intentar entender cuál sean las más efectivas respecto a la variable observada. Tendremos así diferentes brazos esto pero impactará en el tamaño de la muestra que necesitaremos, más medidas diferentes queramos evaluar y más grande será el tamaño de la muestra necesaria para poder obtener resultados estadísticamente significativos. Esto tiene también unas repercusiones desde el punto de vista de la complejidad de la logística y eventuales efectos colaterales como el spillover. En particular en nuestro experimento queremos probar 4 diferentes medidas de distanciamiento social:
+
+1. Protocolo de sana distancia y estrategia de comunicación: elaboración de un protocolo que incluya medidas de sana distancia como una distancia mínima de 1.5 metros entre personas, la implementación de señalamientos en los lugares públicos de estas medidas y difusión de estos lineamientos por medio de una campaña en medios y redes sociales donde se resalta el hecho de quedarse en casa en caso sea posible.
+2. Cierre parcial de actividades no esenciales: el protocolo y la campaña implementadas en el brazo 1 más limitaciones de la afore (50%) en todas las actividades comerciales que no sean esenciales como cinemas, bares y restaurantes. 
+3. Cierre total de actividades no esenciales: las medidas implementadas en el grupo tratado número dos, pero con un cierre total de los establecimientos que se desenvuelven en actividades que no son consideradas como esenciales. 
+4. Cierre total de actividades no esenciales con introducción de sanciones administrativas: además del cierre de las actividades no esenciales se introducen multas administrativas para los que se encuentran fuera de sus casas sin un permiso especifico y una justificación razonable (medida similar a las que utilizaron en Italia y España).
+
+Tendremos así en total 5 brazos incluyendo el grupo de control donde no se implementará ninguna estrategia de sana distancia. En caso de que el tamaño de la muestra (la población del estado) no nos permita implementar los 4 tratamientos se implementará solo el tratamiento más restrictivo.  
+A partir de estos diferentes tratamientos podemos definir el logical framework que permitan la implementación de las medidas planificadas en los diferentes grupos tratados. En esta fase del diseño del experimento trataremos desarrollar una cadena de resultados que permitan de manera implementar las medidas planificadas en los diferentes grupos de control. En esta fase, en que se define el logframe [^1], hay que definir:
+
+* Input: cada programa tendrá diferentes inputs, aunque hay algunos que son comunes a los 5 brazos. Antes que todo habrá que definir el protocolo de sana distancia que detalle las diferentes medidas de sana distancia que tendrá que adoptar la población tratada (distancia en de 1.5 metros entre los ciudadanos, higienización de los espacios públicos, uso de cubrebocas entre otros) y la mejor estrategia de comunicación para informar, y en la medida de lo posible convencer, los habitantes. La implementación del segundo y el tercer programa implicará también la capacitación del personal de seguridad pública para que pueda monitorear de manera eficiente el respecto del afore máxima o del cierre total para las actividades no esenciales. Finalmente, el ultimo tratamiento sería el más difícil y costoso respecto a la implementación siendo que necesitaría de un monitoreo constante e los agentes públicos 
+* Outcome: el primer resultado que nos esperamos de los programas implementados sería una concientización de la ciudadanía y que esta respecte las reglas impuestas para las autoridades. 
+* Intermediate outcomes: El resultad intermedio sería la disminución de la movilidad de las poblaciones tratadas. De acuerdo con el diseño esta será más pronunciada en los brazos tratados con medidas más restrictivas.
+* Finals outcomes: el resultado final según las hipótesis iniciales y la teoría analizada sería la disminución de la mortalidad por COVID-19. 
+
+La tercera fase del diseño del experimento define los indicadores que nos permitirán evaluar el impacto de las diferentes políticas públicas implementadas. Para medir el impacto final del programa la variable de respuesta analizada será la mortalidad que podría ser medida como número de muertes por 1 mil habitantes en caso de que se necesite tener en cuenta de distinto tamaño en los diferentes brazos tratados o unas medidas más desagregada, hasta a nivel individual si tenemos a disposición estos datos, que puede ser sucesivamente agrupada para ulteriores análisis. Este dato podría ser recabado de las actas de defunción de manera relativamente fácil.
+
+Mientras para monitorear la correcta implementación de los diferentes programas será necesario utilizar también otras variables como un índice de movilidad de los ciudadanos y/o el porcentaje de ocupación de los espacios públicos. Esto podría ser hecho por medio de app de tracking o analizando datos de agencias de transporte publico entre otros. El análisis de estas variables resultará particularmente importante para ver si las medidas implementadas están dando efectivamente los resultados esperados en términos de aumento del distanciamiento social y, en caso de anomalías, tomar las medidas necesarias para corregir en curso de obra las implementaciones del experimento.
+
+En base al diseño experimental hasta ahora precisado definiremos ahora el mecanismo con que se llevará a cabo el proceso de aleatorización del RCT, que a su vez dependerá en manera sustancial del tamaño de la muestra y de la conformación sociodemográfica y geográfica del país en examen. 
+
+Por lo que concierne el nivel de aleatorización escogido necesitaremos utilizar una unidad geográfica que minimice los efectos de spillover. Para hacer esto es necesario individuar zonas que tengan un bajo nivel de interacción sobre todo desde un punto de vista económico. Normalmente una aleatorización a nivel regional podría ser la más efectiva, aunque se tendrían que tomar en cuenta los efectos fijos relativos a las características proprias de estas para evitar diferencias en los resultados dados por características que no estamos observando. Otra opción, en caso de un tamaño de muestra reducido sería el utilizo de una estratificación que nos permita llevar un análisis de clusters. 
+
+Respecto al proceso aleatorio de asignación a los diferentes grupos, si hemos logrado homogeneidad entre todas las potenciales unidades que pueden recibir el tratamiento, uno de los métodos más transparente y eficaz sería una lotería publica, esto normalmente favorece la aceptación del proceso de asignación, aunque en este caso, siendo que se trata de la salud de las personas, podría presentar diferentes dificultades. En caso se presenten significativas diferencias regionales una aleatorización entre pares sería la manera más efectiva de obtener una aleatorización exitosa.
+
+De todos modos, antes de implementar el programa tendríamos que analizar los diferentes brazos para averiguar si hay diferencias estadísticamente significativas entre los grupos tratados y el de control.  Entre más alto será el nivel de aleatorización (ejemplo regiones/ macro-regiones) más complicado será tener homogeneidad entre los brazos del experimento respecto a las diferentes características observadas mientras será más bajo el spillover. Se tendrá por lo tanto hacer un trade-off entre estos dos efectos del nivel de aleatorización. Finalmente, una alternativa para intentar medir el efecto de spillover, en lugar de intentar limitarlo, y por lo tanto tenerlo en cuenta en el análisis de los resultados finales, podría ser escoger diferentes niveles de aleatorización (por ejemplo, aleatorizar en una parte del país a nivel regional y en otra a nivel de ciudad). 
+
+El nivel de recolección de datos tendrá que ser hecho al mismo nivel de la aleatorización, aunque es muy probables que algunos serán ya disponibles en diferentes bases de datos administrativas y a un nivel más granular.
+
+## Inciso B
+Escriba la regresión que usaría para estimar los efectos de las medidas implementadas en una variable de mortalidad.
+
+Para poder efectuar el análisis propuestas tenemos que escoger las variables de control que queremos utilizar en nuestra regresión, dividimos estas en cinco macro categorías:
+* Sociodemográficas: edad, sexo, nivel educativo
+* Socioeconómicas: ingresos, porcentaje de población que vive en pobreza, porcentaje de personas empleadas en sectores esenciales, porcentaje de personas empleadas
+* De salud: porcentaje desglosa de habitantes con comorbilidades a nivel de la unidad de aleatorización (hipertensión, obesidad, diabetes, tabaquismo)
+* Disponibilidad hospitalaria: porcentaje de camas disponibles en terapia intensiva y para atención general de la enfermedad
+* Geográficas: densidad poblacional, porcentaje de poblados urbanos/rurales, población presente en la unidad de aleatorización.
+El número de controles resulta ser relativamente alto en cuanto, dada las pocas informaciones que tenemos sobre los mecanismos de transmisión del virus, es necesario evitar problemáticas relativas a las variables omitidas.
+
+La regresión propuesta por lo tanto será:
+
+$$y_i= \alpha + \beta_1T_{1i}+ \beta_2T_{2i}+ \beta_3T_{3i}+ \beta_4T_{4i}+ X_i^{'}\beta_{K-5} + u_i$$
+Las $T_{ji}$ son dummies que definen a cual brazo del experimento fue asignado el individuo mientras las $X_i^{'}\beta_{K-5}$ es el vector de características observables relativas a las 5 macro- categorías precedentemente definidas. Esta regresión es propuesta a partir de la hipótesis de un cumplimiento perfecto de la población respecto a las medidas implementadas, de otra forma tendríamos que añadir controles relativos a un índice de sana distancia que podría ser ligado a la movilidad o a la ocupación de espacio público. El signo y la magnitud de los $\beta$, junto con su significancia, nos permitirá identificar cual tratamiento está resultando más efectivo. Repitiendo el ejercicio en distinto momentos de las pandemias podríamos analizar la evolución del impacto de las medidas al neto de los efectos fijos de tiempo.
+
+## Inciso C
+¿Cuáles considera que serían las distintas dificultades prácticas, institucionales y éticas en la implementación de su experimento ideal?
+
+Un experimento ideal conlleva numerosas dificultades desde un punto de vista de la implementación práctica, institucional, político y ético.
+
+Respecto a la eticidad del experimento, el grupo de control sería dejado en un estatus quo pre-pandemia que podría llevarlo a ser más expuesto a los contagios, contraviniendo, desde un punto de vista médico, el juramento de Hipócrates: si efectivamente el experimento diera los efectos esperados habríamos afectado la salud de una parte de la ciudadanía. Además, más estricto será el tratamiento ejecutados más costoso será para la población, que no podrá trabajar. Sin mecanismos centrales de apoyos económicos adecuados a los ciudadanos, estos serán dejados frente a la disyuntiva entre arriesgar su vida para trabajar o empobrecerse. Siempre relativamente a los tratamientos más invasivos, estos conllevan también problemáticas desde un punto de vista de las limitaciones de las libertades personales y respecto a la privacy (en caso de implementar una app de tracking para monitorear el apego de los ciudadanos a las medidas de sana distancia).
+
+Desde un punto de vista político también resultaría difícil justificar una decisión de este tipo. Indudablemente el aval final a la experimentación tendría que llegar del poder federal y pasar por mecanismos burocráticos- legislativos que podrían hacer tardar el inicio de la implementación rindiendo así impracticable el experimento en caso de que ya los contagios fueron muy difusos.
+
+Institucionalmente resultaría de igual forma llevar a la práctica este ejercicio en cuanto se necesitaría órganos predispuestos a hacer respectar las reglas y monitorear la implementación, para que esta se lleve a cabo en el respecto de los derechos universales.
+
+Por lo que concierne las dificultades practicas ligadas al experimento estas podrán ser de natura logística pero también presupuestaría. Más elaborado es el diseño del RCT mayor serán sus costos de implementación (monitoreo, personal, apoyo a los sectores más afectados por los tratamientos) y más arduo será realizarlo de manera eficiente y eficaz. 
+
+
+# Pregunta 3
+Replique el ejercicio de representar la FEC de salarios en función de educación para México, como en la Figura 3.1.2 de MHE (p. 39), usando los datos del cuarto trimestre de 2019 de la ENOE. El gráfico es complejo, pero recibirá crédito completo si reproduce, al menos por separado, los dos siguientes tipos de gráficos:
+
+## Inciso A - B
+Gráfico de la relación promedio entre años de educación e ingresos.
+
+Importamos las librerias que utilizaremos en el desarrollo del codigo e introducimos la notación cientifica para los outputs. 
+```{r, include=FALSE}
+pacman::p_load(ggplot2,tidyverse,stargazer,tibble, car, sandwich,lmtest, knitr, dplyr)
+options(scipen=999) 
+```
+
+Importamos la bases de datos que necesitaremos para el ejercicio. En nuestro caso se utilizarán los resultados de la ENOE del 4 trimestre del 2019 que previamente hemos descargado del sito del INEGI. Además analizamos la estructura del database para identificar las variables de interés par anuestra analisés.
+
+```{r}
+dbsocio <- as_tibble(read.csv("C:/DAVE2/CIDE/3 semestre/eps/1 TAREA/conjunto_de_datos_sdem_enoe_2019_4t.csv"))
+str(dbsocio)
+```
+
+Las variables que utilizaremos serán *ingo_cup* que nos revela los ingresos mensuales de les entrevistades y *anios_esc* que nos indica el numero de años que estudiaron. Para poder replicar adecuadamente la tabla 3.1.1 del *Mostly Harmless Econometrics* filtramos la base de datos para seleccionar los hombres *(sex==1)* entre los 40 y los 49 años *eda <50 & eda>39*. Además modificaremos los ingresos menusales para que sean expresados como el logaritmo del ingreso semanal (dividimos por 4 el ingreso mensual y le applicamos logaritmo). La trasformación logaritmica de los ingresos,(eso no permitirá desminuir parcialmente la heteroskedasticidad de estos datos. En caso de ingresos declarados igual a 0, dejaremos este valor para sucesivamente filtrarlo. Guardamos la base de datos filtrada en otra variable.
+
+```{r}
+dbsocio2 <- dbsocio%>%mutate(LNIngweekly = if_else(ingocup ==0, 0 ,log(dbsocio$ingocup/4)))%>%filter(sex==1)%>%filter(eda <50 & eda>39)
+```
+
+Analizando la base de datos constatamos que para missing value en los años de escolaridad se utilizó como codifica el numero 99, quitamos por lo tanto estas observaciones. Además quitamos las observaciones que declararon no tener ingresos (ingocup=0) suponiendo que no quisieron declarar sus entradas. De otra forma se vería afectada la distribución de los mismos.
+
+```{r}
+unique(dbsocio2$anios_esc)
+dbsocio2 <- dbsocio2%>%filter(anios_esc!=99 & LNIngweekly!=0)
+
+```
+
+Replicamos la gráfica 3.1.1 que ilustra como varía el promedio del logaritmo de los ingresos semanales para diferentes años de escolaridad. Además, dibujamos la distribución de los ingresos para cuatro niveles específicos de escolaridad, en nuestro caso reputamos que resultan relevante analizar la distribución para 6 años de escolaridad, ósea la distribución de las entradas para las personas que tienen un título de estudio primario, 9 años (secundaria acabada), 12 años (preparatoria acabada) y 16 años (bachillerado acabado). Sobre todo, respecto al ultimo nivel escogido la elección tuvo que ser más subjetiva en cuanto los diferentes programas de bachillerados tienen duración diferente, pero analizando la trayectoria de los ingresos promedio por años de escolaridad notamos que hay un incremento sustancial entre 15 y 16 años de estudios, podemos pensar por lo tanto que la titulación para carreras de 4 años tenga un mayor efecto sobre los ingresos percibido.  De todos modos, el análisis hecho es solo cualitativa y no busca encontrar relaciones causales.
+
+Para realizar la grafica de las distribuciones hemos creado subsets de la base de datos para los años de escolaridad escogidos por el análisis. A partir de estos hemos graficado la distribución de los ingresos (esta fue reescalada solo para fines gráficos, en la siguiente sección las presentaremos en el tamaño canónico). La línea que describe los salarios promedios fue obtenida por medio de una agrupación por años de escolaridad del database filtrado.   
+
+```{r}
+ed_prim <- subset(dbsocio2, anios_esc==6)
+ed_sec <- subset(dbsocio2, anios_esc==9)
+ed_pre <- subset(dbsocio2, anios_esc==12)
+ed_sup <- subset(dbsocio2, anios_esc==16)
+
+
+dens_prim <- density(ed_prim$LNIngweekly, bw=0.09)
+dens_prim<-data.frame(x=(dens_prim$y)*3+mean(ed_prim$anios_esc), y=dens_prim$x)
+dens_prim <- dens_prim[order(dens_prim$y), ]
+
+dens_sec <- density(ed_sec$LNIngweekly, bw=0.09)
+dens_sec<-data.frame(x=(dens_sec$y)*3+mean(ed_sec$anios_esc), y=dens_sec$x)
+dens_sec <- dens_sec[order(dens_sec$y), ]
+
+dens_pre <- density(ed_pre$LNIngweekly, bw=0.09)
+dens_pre<-data.frame(x=(dens_pre$y)*3+mean(ed_pre$anios_esc), y=dens_pre$x)
+dens_pre <- dens_pre[order(dens_pre$y), ]
+
+dens_sup <- density(ed_sup$LNIngweekly, bw=0.09)
+dens_sup<-data.frame(x=(dens_sup$y)*3+mean(ed_sup$anios_esc), y=dens_sup$x)
+dens_sup <- dens_sup[order(dens_sup$y), ]
+
+
+
+dbsocio2%>%group_by(anios_esc)%>%summarize_at("LNIngweekly", mean)%>%
+  ggplot(aes(anios_esc,LNIngweekly))+ geom_line()+ geom_point()+
+  geom_path(data=dens_prim, aes(x,y))+ 
+  geom_vline(xintercept=c(6,9,12,16), lty=2)+
+  geom_segment(data= ed_prim, aes(y = mean(LNIngweekly), yend=mean(LNIngweekly), x=anios_esc, xend = (7.646966-6)/2*3+6),linetype=3 )+
+  geom_path(data=dens_sec, aes(x,y))+
+  geom_segment(data= ed_sec, aes(y = mean(LNIngweekly), yend=mean(LNIngweekly), x=anios_esc, xend = (10.859489-9)/2*3+9 ),linetype=3 )+
+  geom_path(data=dens_pre, aes(x,y))+
+  geom_segment(data= ed_pre, aes(y = mean(LNIngweekly), yend=mean(LNIngweekly), x=anios_esc, xend = (13.66534-12)/2*3+12 ),linetype=3 )+
+  geom_path(data=dens_sup, aes(x,y))+
+  geom_segment(data= ed_sup, aes(y = mean(LNIngweekly), yend=mean(LNIngweekly), x=anios_esc, xend = (17.39563-16)/2*3+16 ),linetype=3 )+
+  coord_cartesian(ylim=c(6, 9))+
+  xlab("Años de escolaridad")+ylab("Logaritmo de los ingresos semanales") + theme_bw()
+```
+
+Replicamos ahora el grafico 3.1.2 del MHE, donde podemos ver la regresión obtenida de los ingresos logarítmicos semanales respecto a los  años de escolaridad, confrontándola con el andamiento de los ingresos promedios.    
+
+```{r}
+dbsocio2%>%group_by(anios_esc)%>%summarize_at("LNIngweekly", mean)%>%
+  ggplot(aes(anios_esc,LNIngweekly))+ geom_line()+ geom_point()+
+  geom_smooth(data=dbsocio2, aes(anios_esc, LNIngweekly),method = "lm", formula = y ~ x, lwd =0.5, color="red", linetype = "dashed")+
+  xlab("Años de escolaridad")+ylab("Logaritmo de los ingresos semanales")+theme_bw()
+```
+
+Finalmente volvemos a analizar las distribuciones de los ingresos para las personas con estudios primarios, secundarios, preparatorios y de bachillerado sin efectos de escala. 
+
+```{r}
+ggplot(subset(dbsocio2,(anios_esc==16|anios_esc==12|anios_esc==9|anios_esc==6)), aes(LNIngweekly, colour=factor(anios_esc), fill=factor(anios_esc)))+ scale_shape_discrete(name="ciao")+ xlab("Logaritmo de los ingresos semanales")+labs(colour="Años escolaridad", fill="Años escolaridad")+ ylab("densidad")+  
+  geom_density(bw=0.09, alpha=0.1)+theme_bw() 
+```
+
+Observamos que a parte que el valor promedio crece, como nos esperábamos de la gráfica de la línea, también la dispersión de los ingresos aumenta, ósea la varianza de la distribución de las entradas sube. Esto podría depender del hecho que en los trabajos más calificados hay mayor varianza en las retribuciones que se pueden obtener, siendo que no son atadas por medidas legislativas como el salario mínimo, dependen más de otros factores como la capacidad de negociación.
+
+# Pregunta 4
+
+De los datos del archivo STAR_public_use.csv para este problema. En este problema replicará la fila correspondiente a la variable age de la Tabla 1 en Angrist et al. (2009).
+
+## Inciso A
+
+Obtenga la media y la desviación estándar en el grupo de control (columna 1), restringiendo la muestra a aquellos individuos con noshow igual a 0.
+
+Importamos la base de datos y analizamos su estructura.
+
+```{r}
+dbstar <- as_tibble(read.csv("C:/DAVE2/CIDE/3 semestre/eps/1 TAREA/STAR_public_use.csv"))
+str(dbstar)
+```
+
+Obtenemos el valor promedio y la varianza de las observaciones por lo que concierne la variable *age*
+
+```{r}
+#standard deviation & mean
+dbstar %>% filter(noshow == 0 & control == 1)%>%summarize(sd(age), mean(age))
+```
+## Inciso B
+Usando una regresión lineal, muestre que el tratamiento es independiente de la edad. De nuevo, debe restringir la muestra quienes tienen noshow igual a 0. Reporte los coeficientes y los errores estándar (columnas 2 a 4).
+
+Efectuamos una regresión lineal para analizar si el tratamiento es independiente de la edad y reportamos los resultados obtenidos. 
+
+```{r}
+lmtrat <- lm(age ~ssp+ sfp + sfsp , data = dbstar %>% filter(noshow == 0))
+stargazer( coef(summary(lmtrat)), title="Indipendencia edad y tratamiento", type= "text", flip = TRUE)
+
+
+```
+Vemos como la diferencias entre el grupo de control y los tratados no son significativas estadisticamente, Podemos por lo tanto suponer que los diferentes brazos son balanceados respecto a la variable observada *edad*. 
+
+## Inciso C
+
+Realice una prueba de significancia conjunta de los coeficientes obtenidos en el punto b. Reporte el estadístico F y el valor p asociado.
+
+Efectuamos una prueba de significancia conjunta para averiguar si efectivamente no hay diferencias en medias entre los diferentes grupos que hacen parte del experimento. 
+
+```{r}
+linearHypothesis(lmtrat, c("ssp","sfp","sfsp"),test="F")
+```
+Dado el p-value obtenido en la prueba de significancia conjunta no podemos rechazar la hipótesis nula donde $\beta_1=\beta_2=\beta3=0$, por lo tanto, podemos afirmar con una confianza del 95% que las medias de edad entre los diferentes brazos son iguales. 
+
+# Pregunta 5
+
+Nuevamente, use los datos del archivo *STAR_public_use.csv* para este problema. En este problema, replicará dos columnas del efecto de tratamiento de la Tabla 5. Note que de nuevo se deben usar solo las observaciones que tienen **noshow** igual a 0. Además, note que se usan las siguientes variables de control: **sex**, **mtongue**, **hsgroup**, **numcourses_nov1**, **lastmin**, **mom_edn** y **dad_edn**, todas ellas categóricas.
+
+Antes de estimar los efectos, sustituya **gpa_year1** por missing cuando **grade_20059_fall** es missing y sustituya **grade_20059_fall** por missing cuando gpa_year1 es missing. Esto le permitirá quedarse con los individuos que tienen información completa.
+
+## Inciso A
+Estime el efecto de cada tipo de tratamiento sobre el GPA, es decir, sobre la variable **gpa_year1**, para toda la muestra (Panel B, columna 1). Ponga atención a los errores estándar.
+
+Para poder estimar los efectos de cada tratamiento sobre **gpa_year1** para toda la muestra tenemos que realizar una regresión de esta variable de respuesta sobre las dummies de los tratamientos y todos los controles. Antes de eso pero es necesario eliminar todas las observaciones que tienen algun missing en sus variables observables. 
+
+```{r}
+dbstar1 <- dbstar %>% mutate(
+  GPA_year1 = ifelse (is.na(grade_20059_fall), NA ,  GPA_year1))%>%
+  mutate(grade_20059_fall = ifelse (is.na(GPA_year1), NA  ,grade_20059_fall ))%>%
+  filter(noshow == 0) %>%select(grade_20059_fall,GPA_year1, ssp, sfp, sfsp, sex, mtongue, hsgroup, numcourses_nov1,lastmin,mom_edn,dad_edn)%>%drop_na()%>%
+  filter(mtongue!="" 
+         &hsgroup!=""
+         &numcourses_nov1!=""
+         &sex!=""
+         &lastmin!=""
+         &mom_edn!=""
+         &dad_edn!="")
+```
+Efectuamos la regresión considerando **sex**, **mtongue**, **hsgroup**, **numcourses_nov1**, **lastmin**, **mom_edn** y **dad_edn** como variables categoricas.
+
+```{r}
+lmdbstar <-lm(GPA_year1 ~  ssp + sfp + sfsp + relevel(factor(sex), ref="M") + factor(mtongue) + factor(hsgroup) + factor(numcourses_nov1) + factor(lastmin) + factor(mom_edn) + factor(dad_edn) , data = dbstar1)
+
+stargazer( coef(summary(lmdbstar)), title="Efectos del tratamiento SIN errores robustos", type= "text")
+```
+
+Los resultados obtenidos reportan los errores estandard calculados como si la distribución fuera homoskedastica, calculamos por lo tanto los errores robustos y los reportamos junto con lso parametros estimados.
+
+```{r}
+robustos1 <-coeftest(lmdbstar, vcov=vcovHC(lmdbstar, "HC1"))
+robustos1 
+```
+## Inciso B
+
+Estime el efecto de recibir cada tipo de tratamiento, considerando los tratamientos SSP o SFP (de cualquier tipo) en las mujeres de la muestra (Panel B, columna 6). Ponga atención a los errores estándar.
+
+Para considerar los tratamiento SSP o SFP en conjunto creamos una dummie que nos indique si la estudiante efectivamente participó a uno de estos dos programas. Filtramos la base para analizar el impacto en la submuestra de las estudiantes.
+
+```{r}
+dbstarb <- dbstar1%>%mutate(sfpany = ifelse((sfp==1| sfsp==1),1,0))%>%filter(sex=="F")
+
+```
+
+Efectuamos la regresión y reportamos los resultados.
+
+```{r}
+lmdbstarb <-lm(GPA_year1 ~  ssp + sfpany + factor(mtongue) + factor(hsgroup) + factor(numcourses_nov1) + factor(lastmin) + factor(mom_edn) + factor(dad_edn) , data = dbstarb)                           
+summary(lmdbstarb)
+```
+
+
+
+De nuevo obtenemos los errores robustos.
+
+```{r}
+robustosb <-coeftest(lmdbstarb, vcov=vcovHC(lmdbstarb, "HC1"))
+robustosb
+```
+ 
+
+
+
+# Bibliografia
+
+[^1]: El logframe utilizado para los elementos de la cadena de resultados fue tomado de las indicaciones de la JPAL, el que viene propuesto por Gartler et al en la “Evaluación de impacto en la práctica” es muy similar, aunque presente una fase más que describe las actividades necesarias a transformar los insumos en resultados. Dada la naturaleza de nuestra intervención y para no sobrecargar la respuesta omitiremos esta fase. 
+
+[^2]: Ridenhour, B., Kowalik, J. M., & Shay, D. K. (2014). Unraveling R0: Considerations for Public Health Applications. American Journal of Public Health, 104(2), e32–e41. https://doi.org/10.2105/ajph.2013.301704
+
+[^3]: World Health Organization (2020) Preguntas y respuestas sobre la transmisión de la COVID-19. WHO Press. https://www.who.int/es/news-room/q-a-detail/q-a-how-is-covid-19-transmitted?gclid=Cj0KCQjw7sz6BRDYARIsAPHzrNJ_oScAE_qnDld4wG6JoLvsR_36_-rQR3BWOB4VZlzNvCStJFF4tg8aAmm9EALw_wcB
+
+
+
+
+
+
+
