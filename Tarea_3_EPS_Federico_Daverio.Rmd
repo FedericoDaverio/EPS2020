@@ -1,0 +1,602 @@
+---
+title: "Tarea 3 EPS"
+author: "Federico Daverio"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: no
+    theme: united
+    highlight: tango
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+options(scipen=999) 
+memory.limit(size=56000)
+library(tidyverse)
+library(reticulate)
+library(stargazer)
+library(AER)
+library(sandwich)
+library(clubSandwich)
+library(modelsummary)
+library(dplyr)
+library(lmtest)
+library(formattable)
+library(car)
+library(nnet)
+library(nlsr)
+library(MASS)
+library(data.table)
+library(Matching)
+library(rdrobust)
+library(binsreg)
+library(lfe)
+library(ggplot2)
+```
+
+# Ejercicio 1
+Esta pregunta se refiere al artículo de Caliendo y Kopeining (2008)1. La Tabla 1 hace un comparativo en términos de sesgo y varianza de algunas de las decisiones importantes que se deben tomar en el contexto de la estimación del TOT usando propensity score matching. Genere una tabla similar agregando una columna después de la de “Sesgo” llamada “Justificación sesgo” y otra después de “Varianza” llamada “Justificación varianza” donde argumente por qué la decisión en cada fila tiene costos y beneficios en términos de sesgo y varianza.
+
+
+![](tab1.png)
+![](tab2.png)
+![](tab3.png)
+
+
+
+# Ejercicio 2
+El siguiente ejercicio se refiere a los datos programa_regularizacion.csv. Esta base contiene una muestra de 4 mil estudiantes. La variable de resultados es la calificación de una prueba estandarizada de matemáticas. La variable **asesoria** indica si el estudiante recibió asesorías en el verano anterior como parte de un programa de regularización académica. Otras variables incluidas en la base de datos son: la distancia (estandarizada) a la escuela, la educación (estandarizada) de la madre, el valor monetario de los activos del hogar y un índice (estandarizado) de pobreza.
+
+## Inciso A
+Estime el *propensity score* usando el modelo de probabilidad no lineal de su elección para la variable de tratamiento asesoría. Justifique la elección de la especificación del modelo de probabilidad no lineal.
+
+Cargamos el DB:
+```{r}
+db<- read.csv("C:/DAVE2/CIDE/3 semestre/eps/3 TAREA/programa_regularizacion.csv", encoding = "latin1")
+```
+
+Ahora bien analizamos las variables que componen el DB:
+```{r}
+str(db)
+```
+
+Calculamos el propensity score por medio de un modelo de probabilidad no lineal probit:
+```{r}
+ps<-glm(asesoria~escuela_dist+educacion_madre+activos+consumo_calorico+pobreza_ind, family=binomial(link="probit"),data=db)
+summary(ps)
+```
+
+Para calcular el propensity score (PS), ósea la probabilidad de ser tratado dado un conjunto de variables observable, lidiando así con el problema d la multidimensionalidad, podemos utilizar distintos modelos probabilísticos. En nuestro caso utilizamos un logit parametrizando la bernoulliana con una función de distribución cumulada de tipo normal. Esto nos dará unas ventajas en el momento en que queremos evaluar el cambio en el PS dada una variación en las características observables siendo que el signo de los estimadores es directamente interpretable y concorde con la variación en el PS. Además, la justificación de su utilizo puede darse de la distribución normal de la variable latente. 
+
+Podemos evaluar cómo se desempeña el modelo logit en la estimación del propensity score:
+```{r}
+ps2<-glm(asesoria~escuela_dist+educacion_madre+activos+consumo_calorico+pobreza_ind, family=binomial(link="logit"),data=db)
+hps<-hist(ps$fitted.values, plot=F)
+hps2<-hist(ps2$fitted.values, plot=F)
+plot(hps, col=alpha('salmon', 0.4))
+plot(hps2, col=alpha('blue', 0.4), add=T)
+```
+
+Notamos que el PS evaluado con el probit es distribuido más uniformemente en los intervalos definidos respecto a los que viene estimados con logit, esto podría darnos una mayor varianza en los valores PS y así tener más información de la muestra.
+
+## Inciso B
+Genere una gráfica que represente la región de soporte común que resulta de la especificación elegida.
+
+Vamos a asociar a las observaciones su propensity score estimado
+```{r}
+db2 <- db %>% 
+  mutate(pshat = predict(ps, type = "response"))
+```
+
+Ploteamos las dos distribuciones como histogramas para tratados y no tratados:
+```{r}
+db2 %>%
+  ggplot(aes(x = pshat)) +
+  geom_histogram(color = "white") +
+  facet_wrap(~asesoria) +
+  xlab("Probabilidad ajustada") +
+  theme_bw()
+
+
+```
+
+Ahora los ploteamos los histogramas traslapados para obtener un mejor "insight":
+```{r}
+ggplot()+
+  geom_histogram( aes(x=db2$pshat,color=factor(db2$asesoria),fill='white', bins=30), alpha=0.2) + 
+  
+  theme_bw() +
+  labs(fill="")
+```
+
+Ploteando las densidad:
+```{r}
+ggplot()+geom_density( aes(x=db2$pshat,color=factor(db2$asesoria), fill= factor(db2$asesoria), bins=30), alpha=0.2) + theme_bw() +labs(fill="")
+```
+
+## Inciso C
+Estime el TOT por el método de vecino más cercano usando la especificación para el propensity score elegida anteriormente.
+
+Asignamos las variables que necesitaremos para estimar el efecto del programa.
+```{r}
+X<-ps$fitted.values
+Y<-db$calificacion
+tr<-db$asesoria
+```
+
+Estimamos el TOT por el método del vecino más cercano. Evaluamos como es la diferencia en media para las características observables entre grupo tratado y de control, antes y después del pareamiento. Siendo que la iniciación del algoritmo es aleatoria plantamos una semilla para que sean replicables los resultados.
+```{r}
+set.seed(123)
+nn1_1<- Match(Y=Y, Tr=tr, X=X, M=1, replace=FALSE, CommonSupport=TRUE)
+```
+
+Efectuamos una prueba de balance para averiguar como los "matching" afectaron las diferencias en medias entre grupo tratado y de control.
+```{r}
+balance_nn1_1 <- MatchBalance(asesoria~escuela_dist+educacion_madre+activos+consumo_calorico+pobreza_ind,
+             data = db,
+             match.out = nn1_1,
+             digits=5,
+             paired=TRUE,
+             print.level=2)
+```
+
+
+Podemos notar que efectivamente disminuyen las diferencias en medias entre los dos grupos y resultan la mayoría no significativas estadísticamente.  
+
+Vamos por lo tanto a estimar nuestro modelo considerando un solo vecino sin remplazo. Esto nos permitirá obtener un menos sesgo, aunque, perdiendo información, la varianza del estimados será más grande.
+
+```{r}
+summary(nn1_1)
+```
+
+El efecto estimado con estas especificaciones resulta ser de 0.081 unidades sobre la clasificación y resulta significativo al 10%.
+
+Podemos ahora implementar un ciclo for para averiguar cómo cambiando las especificaciones varía el valor del t-test para ver para que numero de vecinos se maximiza y el efecto estimado:
+```{r}
+k=30
+i=1
+ts <- matrix(, nrow = k,ncol = 3)
+colnames(ts)<-c("obs","t","eff")
+while (i<=k) {
+  set.seed(123)
+ nn1_i<- Match(Y=Y, Tr=tr, X=X, M=i, replace=FALSE, CommonSupport=TRUE)
+   t=(nn1_i$est)/(nn1_i$se.standard)
+   ts[i,2]=abs(t)
+   ts[i,1]=i
+   ts[i,3]=nn1_i$est
+   i=i+1
+}
+```
+
+Ploteamos los resultados obtenidos (en azul se marca la regla de dedo para valores del estadistico t significativos):
+```{r}
+ts=as.data.frame(ts)
+ggplot()+
+  geom_line(aes(x=ts$obs,y=ts$t))+
+  geom_line(aes(x=ts$obs,y=ts$eff), color='salmon')+
+  geom_hline(yintercept = 1.96,linetype = "dashed", color="blue" )
+  
+  
+
+```
+
+Notamos que al variar del número de vecinos con *Replace=F* solo con 1 vecino encontramos efectos positivos del programa y el coeficiente más significativo.
+
+Repetimos el ejercicio con *Replace=T*. 
+```{r}
+k=30
+i=1
+ts <- matrix(, nrow = k,ncol = 3)
+colnames(ts)<-c("obs","t","eff")
+while (i<=k) {
+  set.seed(123)
+ nn1_i<- Match(Y=Y, Tr=tr, X=X, M=i, replace=TRUE, CommonSupport=TRUE)
+   t=(nn1_i$est)/(nn1_i$se.standard)
+   ts[i,2]=abs(t)
+   ts[i,1]=i
+   ts[i,3]=nn1_i$est
+   i=i+1
+}
+```
+
+Ploteamos los resultados obtenidos:
+```{r}
+ts=as.data.frame(ts)
+ggplot()+
+  geom_line(aes(x=ts$obs,y=ts$t))+
+  geom_line(aes(x=ts$obs,y=ts$eff), color='salmon')+
+  geom_hline(yintercept = 1.96,linetype = "dashed", color="blue" )
+  
+  
+
+```
+
+Podemos notar que si consideramos la muestra de vecinos con remplazo conviene escoger un mayor número de vecinos. Esto nos permitirá tener más información, aunque perderemos precisión.
+
+## Inciso D
+Estime el TOT por el método de radio usando la especificación para el propensity score elegida anteriormente. Justifique la elección del número de vecinos y el tamaño del caliper.
+
+Vamos a estimar el TOT por medio de un caliper de 0.1, esta elección se debe en parte a la distribución de los PS que analizamos previamente y en cuanto queremos tener una buena precisión sin pero perder demasiada información.
+```{r}
+set.seed(123)
+nn1_caliper <- Match(Y=Y, Tr=tr, X=X, caliper = 0.01, replace=FALSE, CommonSupport=TRUE)
+summary(nn1_caliper)
+```
+Notamos que el efecto estimado es de 0.18266 unidades sobre la calificación (más grande respecto al que estiamos con el vicino más cercanos) y es significativo al 1%.
+
+Vamos De nuevo variamos el caliper y vemos cómo cambian los resultados. 
+```{r}
+k=30
+i=1
+ts <- matrix(, nrow = k,ncol = 3)
+colnames(ts)<-c("obs","t","eff")
+while (i<=k) {
+  set.seed(123)
+ nn1_i<- Match(Y=Y, Tr=tr, X=X, caliper = i/100, replace=FALSE, CommonSupport=TRUE)
+   t=(nn1_i$est)/(nn1_i$se.standard)
+   ts[i,2]=abs(t)
+   ts[i,1]=i/100
+   ts[i,3]=nn1_i$est
+   i=i+1
+}
+```
+
+Ploteamos los resultados obtenidos:
+```{r}
+ts=as.data.frame(ts)
+ggplot()+
+  geom_line(aes(x=ts$obs,y=ts$t))+
+  geom_line(aes(x=ts$obs,y=ts$eff), color='salmon')+
+  geom_hline(yintercept = 1.96,linetype = "dashed", color="blue" )
+  
+  
+
+```
+
+Notamos que en ambos casos (muestra con o sin remplazo) caliper pequeños parecen desempeñarse mejor.
+
+# Ejercicio 3
+Suponga que se convierte en asesor de la instancia gubernamental encargada de la seguridad alimentaria. Al gobierno le interesa que la seguridad alimentaria de las familias productoras de maíz para autoconsumo no se vea afectada negativamente por la presencia de cierta plaga y dará una transferencia per cápita a todos los pequeños productores de maíz cuyos cultivos se considere están afectados por dicha plaga. Para determinar qué hogares reciben la transferencia se decide usar un índice de prevalencia de la plaga y se selecciona un umbral por arriba del cual está demostrado que los rendimientos del cultivo del maíz se ven seriamente afectados. Esta inspección se llevará a cabo por autoridades federales y el umbral es conocido solo por estas autoridades. Cuando se determine que la prevalencia está por encima del umbral, el monto del programa será transferido de manera inmediata, electrónicamente.
+
+## Inciso A
+¿Qué aspectos del programa permitirían emplear un diseño de regresión discontinua para evaluar la efectividad de este sobre la seguridad alimentaria y cómo mostraría su validez empíricamente?
+
+La metodología de implementación del programa se presta a una evaluación por medio de una regresión discontinua. Este método de evaluación necesita aparentemente hipótesis menos estrictas respecto a otros métodos cuasiexperimentales. In primis necesitamos que haya un valor umbral respecto a una variable corredora que defina los derechohabientes del programa. En nuestro caso la running variable es el índice de prevalencia de la plaga y por diseño se definirá el umbra por arriba del cual los agricultores recibirán la transferencia en dinero. In secundis requerimos para la implementación de la evaluación por RD de una variable dependiente respecto la cual queremos estimar el efecto del programa. En el caso de estudio es representada por la seguridad alimentaria. Podemos por lo tanto construir un índice compuesto por distintas variables observables y/o un cuestionario para evaluar este parámetro post-intervención.
+
+Siendo que el umbral es definido por el gobierno y los agricultores no tendrían ventaja económica, presumiblemente, en tener sus cultivos más afectados por la plaga podemos suponer que las personas no pueden traer beneficio en manipular la variable de asignación. Este es otro supuesto fundamental para la implementación de la evaluación por RD.
+
+A partir de estas suposiciones podemos pensar que alrededor del umbral la variación del tratamiento es aleatoria, ósea que los individuos tienen la misma probabilidad de ser afectados por la plaga de tal manera de colocarse apenas abajo o arriba del umbral definido para la asignación de la transferencia monetaria.
+Podemos comprobar empíricamente el correcto diseño de la evaluación por RD y sus supuestos analizando las variables observables relevante alrededor del umbral para los dos grupos, el tratado y el de control. Si encontramos diferencias sistemáticas en algunas de estas por los dos grupos podemos pensar en un problema de diseño siendo que por aleatoriedad las discrepancias tendrían que ser idiosincráticas. 
+
+## Inciso B
+¿Cómo emplearía el diseño de este programa para evaluar su efectividad con un modelo de regresión discontinua nítida? Elabore una gráfica donde explique una situación en la que el programa muestra ser efectivo. Describa cómo usaría una regresión para hacer inferencia respecto a la efectividad del programa.
+
+En el caso de estudio tenemos un valor umbral que, con base al nivel de difusión de la plaga calculado por medio de un índice de prevalencia de esta, determina la asignación o menos de la ayuda gubernamental transferencia monetaria). Por lo tanto, se podría ocupar este índice como variable corredora y utilizar el registro gubernamental de las transferencias per cápita de la ayuda para construir una dummie que identifique los tratados y los controles. Habría que definir un umbral alrededor del cual podamos suponer que la diferencias entre los individuos sean idiosincráticas. Si poseemos presupuesto y/o acceso a encuestas respecto a variables observables que puedan afectar nuestra variable dependiente (un índice de seguridad alimentaria) podríamos averiguar este supuesto y/o introducir los controles para una estimación más precisa de los efectos del programa.
+
+Un grafico que podría explicar una situación donde el programa mostró ser efectivo es como el simulado a continuación.
+
+```{r}
+set.seed(123)
+e1=rnorm(10,0,0.05)
+e2=rnorm(10,0,0.05)
+x=seq(1:20)/20
+
+y1=seq(from=10, to=1)/10+e1
+y2=seq(from=10, to=1)/20+e2
+y=c(y1,y2)
+
+d1=rep(0,10)
+d2=rep(1,10)
+d=c(d1,d2)
+
+data<-as.data.frame(t(rbind(x,y,d)))
+
+ggplot()+geom_point(aes(x=data$x,y=data$y))+
+  geom_vline(xintercept=0.5, linetype="dashed", color = "red", size=1)
+
+rdplot(y,x,0.5, p=1)
+rdplot(y,x,0.5, p=2)
+rdplot(y,x,0.5, p=3)
+```
+
+Notamos que alrededor del umbral hay una clara discontinuidad positiva, cosa que podría inducirnos a pensar que el programa haya tenido un efecto positivo. Sin duda esta herramienta grafica puede ser de utilidad, explicativa e informativa en cuanto nos permite probar diferentes formas funcionales e identificar outliers. Esta pero no es suficiente para probar la efectividad del programa. Esto en cuanto es una aproximación al fin de la visualización y podría mostrar efectos donde no hay o al revés dependiendo de la granularidad de los datos escogida para graficarlos.
+
+Podemos estimar el efecto del tratamiento con respecto a este diseño de evaluación por medio de la siguiente ecuación:
+
+$$ y = \alpha + \rho D + \beta X + \epsilon$$
+
+Donde $D$ es la dummie que señala la asignación al tratamiento, $X$ es la variable corredora, en nuestro caso el índice de prevalencia de la plaga, y $y$ la variable dependiente, ósea el índice de seguridad alimentaria.
+Podemos especificar distintas formas funcionales para mejor aproximar la distribución de los datos:
+
+$$ y = \alpha + \rho D + \beta X + \beta_1 X^2 + \epsilon$$
+$$ y = \alpha + \rho D + \beta X+ \beta_1 X^2+ \beta_2 X^3 + \epsilon$$
+Estas ultimas dos especificaciones corresponden a las gráficas **2** y **3** y nos permiten averiguar que la discontinuidad no se deba a la rigidez introducida por la aproximación lineal.
+
+Finalmente podemos especificar coeficientes distintos antes y después del umbral $(u)$:
+
+$$y_i=\alpha+\rho D_i + \beta_1(x_i-u) + \beta_2[(x_i-u)D_i] + \epsilon_i$$
+En cualquier de estas especificaciones la estimación del efecto del tratamiento será dada por $\rho$.
+
+## Inciso C
+¿Qué factores podrían invalidar el uso de este método para evaluar el programa? 
+
+Como vimos previamente el diseño podría ser invalidado si los agricultores pueden traer ventajas en manipular el índice de propagación de la plaga. Por ejemplo, si se prevé que de todos modos el recogido será malo por una sequía inminente podrían preferir la transferencia gubernamental con respecto a seguir cuidando la siembra. Esta posibilidad introduciría una endogeneidad que falsaría los resultados. 
+
+También si controlando por algunas variables observables relevantes encontramos diferencias sistemáticas alrededor del umbral podemos pensar en un diseño equivocado del RD y de la running variable considerada para la asignación. Otro supuesto que necesitaremos para la estimación del efecto causal es que el mecanismo de asignación de los recursos debe que ser transparente y la implementación metodológicamente impecable, de otra forma, en presencia por ejemplo de corrupción, serían beneficiarios del programa personas que *a priori* serían excluidas, factor que podría llevar a sobrestimar el efecto del programa. 
+
+Otro elemento para considerar es el ancho de ventana que vamos a utilizar, si nos alejamos demasiado del umbral podríamos considerar observaciones (agricultores) que son sistemáticamente distintos entre sí. Finalmente, no debería haber elementos independientes del programa que puedan incidir de manera distintas a los dos lados del umbral sobre el índice de seguridad alimentaria (otros programas, condiciones particulares ligadas a la plaga o a los cultivos entre otros), de otra forma asignaríamos un efecto causal al programa que no dependería meramente de esto.
+
+## Inciso D
+Suponga que otro de los asesores juzga como demasiado paternalista la transferencia y propone que, en su lugar, se otorgue un cupón válido para canjearse por bultos de un plaguicida. Asumiendo que en una encuesta posterior usted podría conocer la cantidad precisa de plaguicida aplicado, ¿cómo emplearía un diseño de regresión discontinua difusa para evaluar el efecto del uso del plaguicida sobre la seguridad alimentaria? En particular, describa:
+
+### Inciso i
+¿Cómo estimaría la forma reducida? ¿Cuál es el coeficiente relevante y cuál es su interpretación?
+
+En este segundo caso de estudio no tenemos una variable intensiva en la asignación del tratamiento y una regla determinística sino la discontinuidad afecta la intensidad del tratamiento. Por lo tanto, en este caso explotamos la discontinuidad dada por el valor esperado del tratamiento condicionado a la variable. Esto determina que la discontinuidad se vuelve un IV para el estado del tratamiento.
+
+Para estimar la forma reducida tendremos que regresar el índice de seguridad alimentaria sobre el instrumento binario que indica si se viene superado el umbral. El coeficiente asociado a este indicador estimará el efecto del tratamiento, pero no será afectado por la cantidad de plaguicida utilizado. 
+
+Matemáticamente:
+$$Y_i=\alpha + \gamma D_i + \beta Z + \epsilon$$
+
+El coeficiente que define el efecto estimado alrededor del umbral es $\gamma$ y siendo asociado a una variable intensiva no considera la cantidad de plaguicida utilizado.
+  
+### Inciso ii
+¿Cómo estimaría la primera y la segunda etapa? ¿Cuáles son los coeficientes relevantes y cuál es su interpretación?
+
+En la primera etapa se hará la regresión de la cantidad de bultos de plaguicida utilizados, variable afectada por endogeneidad, sobre la variable indicadora del umbral, nuestro instrumento. 
+
+Ósea:
+$$\bar X_i=\alpha_1+\phi D_i + \beta_1 R_i + \epsilon_{1i}$$
+
+Mientras para la segunda etapa, como hacemos usualmente en los modelos MC2E, consideraremos los valores predichos de la cantidad de plaguicida, que ya no será endógena siendo estimado por medio del instrumento, para calcular la regresión que considera como variable dependiente el índice de seguridad alimentaria:
+
+$$Y_i= \alpha_2 + \lambda \bar X_i + \beta_2 R_i + \epsilon_{2i}$$
+
+$\hat \lambda$ estimará el efecto de haber sido beneficiado del programa. Recordamos que, en este caso, si hacemos el procedimiento “manualmente”, tendremos errores estándar incorrectos.
+
+### Inciso iii
+ ¿Cuáles son los supuestos necesarios para estimar este modelo usando mínimos cuadrados en dos etapas?
+ 
+El primer supuesto es que la asignación al programa sea correlacionada con la cantidad de pesticida adquirida con la variable (Relevancia), esto lo podemos probar estadísticamente durante la primera etapa, mientras el segundo es que el instrumento sea exógeno, ósea que la asignación al programa sea aleatoria alrededor del umbral y por lo tanto ortogonal al error. Esto lo podemos suponer en el momento en que los agricultores no pueden manipular las características que determinan la asignación al programa.  
+
+# Ejercicio 4
+El siguiente problema se basa en una publicación reciente de Calonico, Cattaneo, Farrell y Titiunik (2019). La base de datos *headstar.csv* contiene información de 2,810 condados de los Estados Unidos. La variable **mort_age59_related_postHS** indica la mortalidad infantil en cada uno de los condados. El programa Head Star otorgó fondos de su componente de salud a todos los condados con un índice de pobreza superior a 59.1984. La variable **povrate60** es el índice de pobreza para cada condado. Se desea estimar el efecto del programa en la mortalidad infantil empleando un diseño de regresión discontinua.
+
+## Inciso A
+Genere una gráfica donde muestre evidencia de una discontinuidad en la tasa de mortalidad para aquellos condados que recibieron fondos del programa.
+
+Importamos la base de datos:
+```{r}
+dbhead<- read.csv("C:/DAVE2/CIDE/3 semestre/eps/3 TAREA/headstar.csv", encoding = "latin1")
+```
+
+Analizamos su estructura:
+```{r}
+str(dbhead)
+```
+Notamos como haya una dummie para quien está abajo de la línea de la pobreza y por lo tanto no recibió fondos. 
+
+Efectuamos una primera inspección visual de las observaciones respecto a su nivel de pobreza y la tasa de mortalidad por medio de un scatter plot:
+
+```{r}
+dbhead%>%
+ggplot(aes(x=povrate60,y=mort_age59_related_postHS))+
+  geom_point()+
+  geom_vline(xintercept =59.1968 , linetype="dashed", color = "red", size=1)
+```
+Notamos que hay un gran número de condados donde la tasa de mortalidad fue 0. Esto puede deberse de la unidad geográfica escogida, bastante pequeña en general, y por el hecho que estamos considerando los datos de un solo corte transversal. Aún eliminando de la gráfica las observaciones en 0 notamos que hay muchos condados la tasa de mortalidad es cercana al 0 y solo unos pocos puntos tienen mort_age59 muy altas:
+
+```{r}
+dbhead%>%filter(mort_age59_related_postHS>0)%>%
+ggplot(aes(x=povrate60,y=mort_age59_related_postHS))+
+  geom_point()+
+  geom_vline(xintercept =59.1968 , linetype="dashed", color = "red", size=1)
+```
+Ahora bien, el paquete desarrollado por los mismos Calonico et al. nos provee una función para plotear la regresión discontinua donde es suficiente proveer el "cutoff", la variable dependiente y la independiente para que la función agregue en intervalos las observaciones y aproxime el andamiento de estas minimizando el error cuadrático por medio de dos regresiones polinómicas de grado mayor a 3 para cada lado del umbral:
+
+```{r}
+rdplot(dbhead$mort_age59_related_postHS,dbhead$povrate60, c=59.1968)
+```
+
+Queremos aproximar el resultados obtenido por los autores "a manita". 
+
+Empezamos haciendo una regresión lineal de orden 1 a los dos lados del cutoff y obtenemos los valores predicho de las mortalidades por medio de los estimadores obtenidos.
+
+```{r}
+regsx <- lm(mort_age59_related_postHS ~ povrate60, data = subset(dbhead, povrate60<59.1984))
+regdx <- lm(mort_age59_related_postHS ~ povrate60, data = subset(dbhead, povrate60>=59.1984))
+```
+
+Guardamos los valores predicho, obtenidos por medio de los estimadores de la regresión, en un database:
+
+```{r}
+dbhead2 <- dbhead %>% 
+  mutate(fittedsx=ifelse(povrate60<59.1984,fitted(regsx),NA)) %>% 
+  mutate(fitteddx=ifelse(povrate60>=59.1984,fitted(regdx),NA))
+```
+
+Ploteamos las observaciones juntos con las tendencias identificadas con un modelo de aproximación lineal:
+
+```{r}
+dbhead2 %>%
+ggplot(aes(x=povrate60,y=mort_age59_related_postHS))+
+geom_point()+
+geom_vline(xintercept=59.1984, linetype="dashed", color = "red", size=1) +
+geom_line(aes(x=povrate60, y=fittedsx),color="salmon",linetype = "dotdash") +
+geom_line(aes(x=povrate60, y=fitteddx,color="salmon",linetype = "dotdash"))
+
+```
+
+La gráfica se presenta todavía confusa, pero si enfocamos nuestros análisis al rededor del umbral podemos notar la discontinuidad:
+
+```{r}
+dbhead2 %>%
+ggplot(aes(x=povrate60,y=mort_age59_related_postHS))+
+geom_point()+
+geom_vline(xintercept=59.1984, linetype="dashed", color = "red", size=1) +
+geom_line(aes(x=povrate60, y=fittedsx),color="salmon",linetype = "dotdash") +
+geom_line(aes(x=povrate60, y=fitteddx,color="salmon",linetype = "dotdash"))+
+ylim(0,4) +
+xlim(58.5,60.5)
+```
+
+Podemos notar una discontinuidad al rededor del umbral, aunque la estimación no marca una clara tendencia y es bastante ruidosa.
+
+Intentamos hacer el mismo procedimiento, pero con un polinomio de grado 4 para la aproximación:
+```{r}
+regsx4 <- lm(mort_age59_related_postHS ~ povrate60 + I(povrate60^2)+ I(povrate60^3)+ I(povrate60^4), data = subset(dbhead, povrate60<59.1984))
+regdx4 <- lm(mort_age59_related_postHS ~ povrate60+ I(povrate60^2)+ I(povrate60^3)+ I(povrate60^4), data = subset(dbhead, povrate60>=59.1984))
+```
+
+Guardamos de nuevo los valores predicho, obtenidos por medio de los estimadores de la regresión, en un db:
+```{r}
+dbhead3 <- dbhead %>% 
+  mutate(fittedsx4=ifelse(povrate60<59.1984,fitted(regsx4),NA)) %>% 
+  mutate(fitteddx4=ifelse(povrate60>=59.1984,fitted(regdx4),NA))
+```
+
+Ploteamos los resultados.
+```{r}
+dbhead3 %>%
+ggplot(aes(x=povrate60,y=mort_age59_related_postHS))+
+geom_point()+
+geom_vline(xintercept=59.1984, linetype="dashed", color = "red", size=1) +
+geom_line(aes(x=povrate60, y=fittedsx4),color="salmon",linetype = "dotdash") +
+geom_line(aes(x=povrate60, y=fitteddx4),color="salmon",linetype = "dotdash")+
+ylim(0,4) +
+xlim(58.5,60.5)
+```
+
+Podemos notar de nuevo una discontinuidad al rededor del umbral. Aunque la representación grafica no es suficiente en sí para asegurar el efecto causal, podemos notar que no hay cambios sustanciales en esta misma a pesar de la forma funcional para aproximar la distribución, esto nos permite pensar que efectivamente hay una discontinuidad identificable por medio de RD siendo que uno de los supuestos es que este "salto" se tiene que presentar independientemente de la forma funcional utilizada.  
+
+Finalmente, podemos efectuar una aproximación más suave por medio de una regresión:
+```{r}
+ggplot(dbhead,
+       aes(x=povrate60 ,y= mort_age59_related_postHS, 
+           color=as.factor(belowline), shape=as.factor(belowline)))+
+  labs(x = "Indice de pobreza", y = "Mortalidad")+
+  geom_point()+
+  xlim(55, 65)+
+  ylim(0, 20)+
+  geom_smooth(se=FALSE)+
+  geom_vline(xintercept=59.1984, linetype="dashed", color = "red")+theme_bw()
+```
+
+De nuevo notamos como efectivamente parece haber una discontinuidad alrededor del umbral.
+
+## Inciso B
+Estime la versión más básica de un modelo de regresión discontinua. Reporte el coeficiente estimado del efecto del tratamiento y su significancia estadística. Interprete su resultado.
+
+Para estimar el modelo más sencillo notamos en primer lugar que en la estructura de nuestro db hay una variable que identifica si un municipio está por debajo del umbral de pobreza:
+```{r}
+str(dbhead)
+```
+
+El modelo más sencillo para estimar una regresión discontinua nítida es dado por la ecuación:
+
+$$y_i=D_i + Run_i + \epsilon_i$$
+Donde $D$ es una dummie para identificar los municipios que recibieron el tratamiento mientras run es la variable corredora, ósea la observable respecto a la cual se determina la asignación. Recordamos que los supuestos de identificación de la regresión discontinua es la homogeneidad y balance de los grupos al rededor del umbral. Por lo tanto, vamos a calcular el efecto estimado del tratamiento por distintos anchos de banda (distancia de la observación respecto al cutoff) para ver cómo cambia la estimación del efecto:
+
+Definimos un primer ancho de banda que incluya todas las observaciones al rededor del umbral:
+```{r}
+bw=50
+```
+
+Para estimar la ecuación tendremos que tomar el complemento a la dummie que identifica los municipios bajo el umbral de pobreza: $D= (below.line-1)$, así de tener una interpretación más directa.
+
+```{r}
+rds50<-lm(mort_age59_related_postHS~I(1-belowline)+povrate60, subset(dbhead,(povrate60<=59.1918+bw & povrate60>=59.1918-bw)))
+summary(rds50)
+```
+Notamos que parece haber efectivamente una disminución de la mortalidad (el coeficiente estimados es de *-0.94875*) y es significativo al $1\%$ ($p-value=0.04219$)
+
+Volvemos a estimar el modelo considerando solo los municipios al rededor del umbral ($povrate \pm 2$):
+
+```{r}
+bw2=2
+```
+
+
+```{r}
+rds2<-lm(mort_age59_related_postHS~I(1-belowline)+povrate60, subset(dbhead,(povrate60<=59.1918+bw2 & povrate60>=59.1918-bw2)))
+summary(rds2)
+```
+
+Considerando solo los municipios al rededor del umbral podemos notar que el efecto parece intensificarse en magnitud, tenemos una tasa de mortalidad inferior entre tratados y no de 2.8229 niñes) pero ya no resulta significativo estadísticamente ($sd=2.3489 \wedge p-value=0.232$). Cabe mencionar que el ancho de banda fue escogido subjetivamente y no óptimamente.
+
+Podemos ahora utilizar para el análisis paramétrico una función propria de la librería *lfe* para estimar la regresión discontinua. La sintaxis de la fórmula es la siguiente:
+
+y ~ x1 x2 | Efectos fijos | Instrumentos | cluster
+
+```{r}
+dbheadind<-dbhead%>%mutate(id_cond=index(dbhead))
+
+rdg <- felm(mort_age59_related_postHS ~ povrate60 + I(1-belowline) | 0 | 0 |0, data = dbheadind )
+
+rdc <- felm(mort_age59_related_postHS ~ povrate60 + I(1-belowline)  | 0 | 0 |id_cond, data = dbheadind )
+
+stargazer(rdg, rdc, type = "text")
+```
+
+Notamos *in primis* que obtenemos los mismo resultados obtenidos inicialmente por medio de MCO con las especificaciones para una regresión discontinua. *In secundis* la clusterización a nivel municipio no cambia la significatividad de los resultados, así como nos esperábamos por construcción.
+
+Podemos también especificar distintas formas funcionales con polinomios de grados más alto o interacciones entre la variable corredora y la dummie de asignación:
+
+```{r}
+rdg2 <- felm(mort_age59_related_postHS ~ povrate60 + I(povrate60^2) + I(1-belowline) | 0 | 0 |0, data = dbhead )
+rdg3 <- felm(mort_age59_related_postHS ~ povrate60 + povrate60:I(1-belowline) + I(1-belowline) | 0 | 0 |0, data = dbhead )
+
+stargazer(rdg, rdg2, rdg3, type = "text")
+```
+
+Notamos que ocn la segunda especificación los resultados siguen significativos (aún solo al 10%) y aumentan en magnitud (*-1.172*) mientras con la tercera no tenemos un efecto estadísticamente distinto de *0*.
+
+## Inciso C
+En el artículo de Calonico et al. (2019) se reportan los resultados al emplear un modelo flexible de regresión discontinua con controles. Los controles están incluidos en la misma base de datos, sin embargo, los autores no reportan la forma precisa en que realizan esta estimación. Proponga un modelo con controles y con un ancho de ventana. Use la función rdbwselect para explorar algunas posibilidades de ancho de ventana elegidos de manera óptima y compare sus resultados con los reportados en el artículo.
+
+Reportamos la tabla del paper:
+
+![Tabla 1](table1.png)
+Creamos los vectores que serán utilizados para la función *rdbwselect* como variables dependientes, corredora y para ajustar respecto a la covarianza (controles). Se utilizarán todas las variables de la base de datos como controles.
+
+```{r}
+x <- dbhead$povrate60
+y <- dbhead$mort_age59_related_postHS
+z <- cbind(dbhead$census1960_pop, dbhead$census1960_pctsch1417, dbhead$census1960_pctsch534,
+dbhead$census1960_pctsch25plus, dbhead$census1960_pop1417, dbhead$census1960_pop534,
+dbhead$census1960_pop25plus, dbhead$census1960_pcturban, dbhead$census1960_pctblack)
+```
+
+Definimos el ancho de banda optimo con la función dedicada de la paquetería *rdbwselect* con y sin ajuste por las covariables.
+
+```{r}
+summary(rdbwselect(y, x, c= 59.1984, all = T, kernel = "triangular"))
+
+summary(rdbwselect(y, x, c= 59.1984,all = T, kernel = "triangular", covs=z))
+```
+
+Con los resultados obtenidos respecto a ancho de banda y sesgo calculamos las diferentes regresiones discontinuas. En la primera RD utilizaremos *h* y *b* identificados sin considerar (ajustar por) las covariables y estimaremos la regresión sin controles. En la segunda introducimos los controles, pero mantenemos los valores para la identificación del ancho de banda optimo no ajustados por las covariables. Finalmente, en la tercera regresión utilizamos los controles y los parámetros óptimos para la "bandwith" calculados considerando el ajuste por la covariables.
+
+```{r}
+
+summary(rdrobust(y, x, c = 59.1984,h=6.812, b=10.727, masspoints="off", stdvars="on"))
+
+summary(rdrobust(y, x, c = 59.1984,h=6.812, b=10.727, covs = z, masspoints="off", stdvars="on"))
+
+summary(rdrobust(y, x, c = 59.1984, covs = z,h=6.98, b=11.64, masspoints="off", stdvars="on"))
+
+```
+
+Notamos que efectivamente logramos replicar los datos presentados en la Tabla 1 del paper. 
+
+
