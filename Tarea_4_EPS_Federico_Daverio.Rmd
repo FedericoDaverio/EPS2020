@@ -1,0 +1,331 @@
+---
+title: "Tarea 4 EPS"
+author: "Federico Daverio"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: no
+    theme: united
+    highlight: tango
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+options(scipen=999) 
+memory.limit(size=56000)
+library(tidyverse)
+library(stargazer)
+library(Synth)
+library(ggplot2)
+
+setwd('C:/DAVE2/CIDE/3 semestre/eps/4 TAREA')
+```
+
+# Pregunta 1
+Basado en Abadie, Diamond, & Hainmueller (2010).^[1]
+
+En la Sesión 22 estimamos el control sintético para los datos de California y la Proposición 99. La función synth, que realiza la optimización para estimar $V$ y $W$, usa por defecto el optimizador de Nelder-Mead. Este método es un optimizador que no requiere especificar derivadas y que es útil para problemas altamente no lineales. A costa de estos beneficios, el optimizador de Nelder-Mead puede ser computacionalmente intensivo. La opción optimxmethod de la función synth permite implementar el control sintético con otros métodos de optimización. Una alternativa es el método nlm, un método basado en métodos newtonianos por medio de aproximaciones usando derivadas. Este segundo método es mucho más rápido, pero menos exacto.
+
+## Inciso A
+Modifique la estimación del control sintético de la Sesión 22, usando ahora el método de optimización nlm.
+Se modifica como requerido el modelo:
+```{r}
+panel.ca <- as.data.frame(read_csv("./california_panel.csv"))
+
+dataprep.out <-
+  dataprep(panel.ca,
+           predictors= c("lnincome", "beer", "age15to24","retprice"),
+           predictors.op = c("mean"),
+           dependent = c("cigsale"),
+           unit.variable = c("state_id"),
+           time.variable = c("year"),
+           special.predictors = list(
+             list("cigsale",1975,c("mean")),
+             list("cigsale",1980,c("mean")),
+             list("cigsale",1988,c("mean"))),
+           treatment.identifier = 3,
+           controls.identifier = c(1:2,4:39),
+           time.predictors.prior = c(1980:1988),
+           time.optimize.ssr = c(1970:1988),
+           unit.names.variable = c("state"),
+           time.plot = c(1970:2000))
+
+# trabajo en clase
+synth.out <- synth(data.prep.obj = dataprep.out)
+synth.tables <- synth.tab(dataprep.res = dataprep.out,
+                          synth.res = synth.out)
+
+#homework
+synth2.out <- synth(data.prep.obj = dataprep.out, optimxmethod =c("nlm"))
+synth2.tables <- synth.tab(dataprep.res = dataprep.out,
+                          synth.res = synth2.out)
+
+```
+
+## Inciso B
+
+¿Cómo se modifican los resultados en términos de la matriz $V$ estimada?
+
+Por lo que concierne la matriz estimada $V$ tendremos que:
+
+```{r}
+print(cbind(synth.tables$tab.v,synth2.tables$tab.v) )
+```
+Podemos notar que se vuelven más relevantes las observaciones de la variable dependiente en puntos fijos (75-80) pre-tratamiento que habían sida añadida al conjunto de observables para dar mayor robustez al control sintético. Además, crece la relevancia de la variable ligada a los precios de venta de los cigarros mientras todos los demás pesos demás quedan invariados o disminuyen. 
+
+## Inciso C
+¿Cómo se modifican los resultados en términos de la matriz W estimada?
+
+De igual forma podemos notar como cambian también los valores asociados a los diferentes donadores y sus relativos pesos (W):
+
+```{r}
+a = synth2.tables$tab.w
+
+jointdb= left_join(synth.tables$tab.w,a,by = c( "unit.names", "unit.numbers")) 
+
+jointdb
+```
+En particular notamos que Colorado se vuelve mucho más importante en la definición del sintético (0.328 vs 0.175) y también Connecticut aumenta su importancia (0.66 vs 0.62) y Utah (0.369 vs 0.343) mientras Nevada mantiene el mismo impacto proporcional. Finalmente, Montana y Idaho con el nuevo algoritmo de optimización ya no hacen parte del pool de donadores.
+
+## Inciso D
+¿Cómo se modifica la conclusión sobre el efecto que tuvo la Proposición 99 en el consumo de cigarros?
+
+```{r}
+path.plot(synth.res = synth2.out,
+          dataprep.res = dataprep.out,
+          tr.intake = 1989,
+          Ylab = c("per-capita cigarette sales (in packs)"),
+          Xlab = c("year"), 
+          Ylim = c(0,140), 
+          Legend = c("California","synthetic California"))
+
+gaps.plot(synth.res = synth2.out,
+          dataprep.res = dataprep.out,
+          tr.intake = 1989,
+          Ylab = c("per-capita cigarette sales (in packs)"),
+          Xlab = c("year"), 
+          Ylim = c(-30,30))
+
+```
+
+Podemos notar que gráficamente el resultado arrojado con la construcción del contrafactual sintético no parece cambiar e manera relevante.
+
+Otra opción es crear un indicador sintético del impacto para evaluar como cambió la estimación. Para hacer esto proponemos la sumatoria de las diferencias entre control sintético y trayectoria real de la variable dependiente en el periodo post tratamiento.
+
+Para hacer esto creamos unos vectores que incluyan los valores de la variable dependiente (paquete de cigarros per cápita al año) del andamiento real de la misma y las dos estimaciones sintéticas en el periodo post-intervención.
+
+```{r}
+Yr<- dataprep.out$Y1plot[20:31]
+
+Ys1<- (dataprep.out$Y0plot %*% synth.out$solution.w)[20:31]
+
+Ys2<- (dataprep.out$Y0plot %*% synth2.out$solution.w)[20:31]
+```
+
+Ahora bien, obtenemos los indicadores sintéticos:
+
+```{r}
+ES1<- sum(Yr-Ys1)
+Es2<- sum(Yr-Ys2)
+
+ES1
+Es2
+```
+
+Notamos que en el segundo caso el efecto total es menor, aunque los valores no difieren sustancialmente.
+
+# Pregunta 2
+
+Basado en Low, H., y Meghir, C. (2017).
+
+## Inciso A
+¿Cuáles son las diferencias entre un modelo econométrico estructural y uno de forma reducida?
+
+La principal característica de los modelos estructurales econométricos es su estrecha conexión con la teoría, sobre todo microeconómica. En estos modelos hay una definición clara de la función de objetivo de los agentes, su conjunto de posibilidad y el ambiente económico en el cual se desarrollan. Una de las ventajas principales de un modelo estructural es que puede ser utilizado para hacer predicciones de eventuales cambios en las variables independientes siendo que su validez y significancia depende de la relación estructural y los datos se utilizaron solo para la estimación de los parámetros. 
+
+Si asumimos que el modelo estructural es invariante en un determinado plazo de tiempo este puede ser utilizado para analizar impactos potenciales de nuevas políticas públicas, optimizando los resultados dada la restricción presupuestaria, o modificaciones de programas ya existentes. Muchas veces los modelos de forma reducidas vienen utilizados para validar las predicciones obtenidas con los modelos estructurales.
+
+Los modelos estructurales, pero tienen como desventaja la dificultad en su formulación y utilizo dad su complejidad además que muchas veces dan origen a modelos demasiado complicados que resultan difícil de manejar desde un punto de vista teórico y computacional, rendiendo oscuro el mecanismo de identificación y propagación de los efectos. Es por lo tanto necesario obtener un buen compromiso entre una complejidad del modelo que lo rinda económicamente significativo y relevante, y una transparencia en el modelado que permita entender los mecanismos subyacentes. Para hacer esto se pueden utilizar los principios de separabilidad de Fischer y Gorman. Esta combinación de RCTs/cuasiexperimentos y modelos estructurales puede reforzar la validez del estudio empírico.
+
+Las principales ventajas de los modelos en forma reducidas es que resultan más fáciles computacionalmente, evitan lo más posibles definir el contexto teórico y se enfocan en la estimación del efecto de un determinado programa. Requieren por lo tanto condiciones más débiles respecto a los modelos estructurales siendo que no necesitan de un especifico modelo económico subyacente, pero eso debilita su validez externa y su capacidad predictiva. El estado del arte en la estimación de estos modelos son los RCTs. 
+
+## Inciso B
+¿Qué se entiende por un modelo completamente especificado?
+
+Los modelos completamente especificados hacen hipótesis explicitas respecto a la función objetivo que los agentes quieren optimizar, su entorno económico, la estructura informativa en su posesión, así como las restricciones a que están sujetos y las posibles decisiones que pueden tomar, ósea las variables decisionales y sus dominios. Son llamados así en cuanto la definición del problema permite al agente obtener un óptimo bajo las condiciones dadas, ósea una solución completa en función de su conjunto de información. Muchas veces, como por ejemplo en el contexto de la economía laboral, estos modelos representan la base para los estudios empíricos (Keane y Wolpin, 1997). 
+
+En estos modelos normalmente necesitamos definir la distribución de los eventos aleatorios, sus dinámicas y persistencias. Además, tendremos que definir el mecanismo y los efectos de las variables observables e inobservables, tanto endógenas como exógenas, que pueden influenciar el comportamiento del agente. Técnicamente ningún modelo es realmente completo siendo una abstracción. En este caso la decisión más relevante es decidir que modelar y que no. Esos modelos son particularmente relevantes cuando queremos estimar el efecto a largo plazo de una política pública y permite ir más allá respecto a la simple estimación de los parámetros de inter o la verificación de una hipótesis especifica. Entre los más importantes modelos completamente especificados tenemos los de equilibrio general. 
+
+Al contrario, los modelos estructurales parcialmente especificados se enfocan usualmente en un solo aspecto de un modelo completamente especificado.  En esto modelos no hay suficiente información para que los agentes encuentren la solución óptima en función de su conjunto de información. Aunque la relación definida por el modelo estructural sea parcial resulta de interés y permite entender algunas dinámicas además de representar una herramienta empírica importante permitiéndonos averiguar implicaciones teóricas y estimar parámetros contextuales. En estos modelos es fundamental ser transparentes respecto a los parámetros que se mantendrán constantes y las condiciones bajo las cuales los resultados son válidos.
+
+## Inciso C
+¿Cómo se puede combinar la información proveniente de una intervención experimental con un modelo estructural? Mencione un ejemplo de una combinación exitosa de esta naturaleza.
+
+La combinación de un modelo estructural con la información proveniente de una intervención experimental puede limitar las problemáticas relativas a ambas metodologías permitiendo lograr resultados más robustos. Tendremos por lo tanto las ventajas de una evaluación creíble desde un punto de vista de la definición del contrafactual basada en un experimento aleatorizado o un cambio que se asume exógeno en una política pública con el análisis sistemática asociada a los modelos estructurales. 
+
+Los datos experimentales obtenidos con el RCT, o el cuasiexperimento, pueden ser utilizados o para validar el modelo estructural o para guiar y ayudar en el proceso de estimación. Un ejemplo de como un experimento puede contribuir al potencial de identificación del modelo estructural es dado por el artículo de Attanasio, Meghir y Santiago de 2012. Los investigadores utilizaron los resultados surgidos de las estimaciones del impacto de un programa de transferencias condicionadas implementado por el gobierno de México en 1998, PROGRESA. Este programa era intencionado en hacer crecer la participación escolástica de los niños en áreas rurales pobres y aumentar participación en los cuidados preventivo por parte de las madres. PROGRESA fue evaluado como un experimento aleatorio controlado agrupado y mostró significativos impactos positivos (Schultz 2004).  
+
+En un modelo económico estándar, las becas escolásticas condicionadas cambian la participación al instituto educativo disminuyendo el costo de oportunidad de la educación. Todd y Wolpin en 2006 utilizaron esta información para validar un modelo de asistencia a la educación y fertilidad utilizando, pero los datos relativos al grupo de control. A partir de estos estimaron el impacto del experimento al reducir el salario de su modelo en una cantidad equivalente a la subvención dada por el programa cuando el niño iba a la escuela. Attanasio et al. utilizaron mientras los datos del experimento para identificar un modelo más desarrollado que implicaba una función más general del costo de oportunidad de la educación. Como Todd y Wolpin crearon un modelo previsional de la elección educativa en la preparatoria donde los individuos decidían en cada periodo si frecuentar la escuela. 
+
+Los beneficios de la educación derivan de mejores oportunidades en el mercado laboral y se identificaron por medio de la asistencia escolar del grupo de control. El costo de oportunidad de la educación es afectado por distintos factores según un modelo teórico estructural que resulta dinámico. El punto principal del modelo estimado por Atanasio el al. es que permitió que la transferencia monetaria gubernamental tuviera diferentes impactos respecto a un salario, los autores utilizaron la variación experimental para identificar este efecto extra de las becas. 
+
+Incorporando este aspecto y la incertidumbre ligada a la superación del año escolar los efectos estimados resultaron mayores respecto a los que se habían predichos modelando el cambio de la asistencia escolástica en función de los ingresos perdidos. Esto evidenció que los datos experimentales permiten al modelo ser extendido y logra individuar directamente los efectos de las becas que resultaron diferentes a la evaluación surgida por la teoría estándar del costo de oportunidad. Los datos recaudados del RCT permitieron relajar algunas restricciones del modelo estructurales basadas en la teoría neoclásica, ampliando así el alcance del modelo y la interpretación de los resultados experimentales.
+
+Claramente esto induce ulteriores preguntas que tienen que ser investigadas desde un punto de vista teórico. Es importante pero no sobrestimar las sinergias entre modelos estructurales y experimentos siendo que en la mayoría de los casos los resultados de este ultimo ofrece solo una limitada fuente de variación, ligada a obtener o menos el programa, que no siempre es suficiente a satisfacer los requisitos de identificación de un modelo dinámico que normalmente requiere que las variables cambien de manera continua (Heckman y Navarro 2007).
+
+## Inciso D
+¿En qué consiste el método de momentos para la estimación de modelos estructurales?
+
+El método de momentos para la estimación de modelos estructurales desarrolla por Su y Judd en 2012 intenta resolver la dificultad computacional relativa a la estimación y resolución repetida de un modelo estructural. Siendo que estos problemas de optimización no lineal vienen resueltos por métodos de aproximación numérica muchas veces esto resulta particularmente intensivo desde el punto de vista de la elaboración de la máquina. Además, cuando queremos evaluar los efectos surgidos de un cambio en los parámetros la solución tiene que ser calculada desde cero.  Finalmente, los métodos de aproximación numérica introducen un termino de error en la solución que determina una mayor complejidad en la estimación. 
+Normalmente los modelos estructurales vienen estimados por medio del método de máxima verosimilitud, pero esto resulta imposible computacionalmente en modelos muy elaborados. 
+
+Por esto se utiliza el método de momentos donde con este termino se indica cualquier estadística relativa a los datos cuyas contrapartes se pueden calcular a partir de simulaciones de modelos para un conjunto dado de parámetros del modelo. Los momentos pueden incluir medias, variaciones y tasas de transición entre estados, así como los coeficientes de regresiones auxiliares mas simples.  Con el método de momentos es más sencillo definir cual característica de los datos identifica los parámetros estructurales. 
+
+Además, el utilizo de base de datos múltiples es directo y el investigador puede concentrar en adecuar los momentos al análisis. Finalmente, esto permite eliminar los limites computacionales relativos al uso de grandes bases de datos administrativas. El reverso de la moneda es que no utilizamos todos los datos para evaluar el modelo y el hecho que no sea trivial definir cual momentos utilizar. Con bases pequeñas además los resultados pueden ser sensibles a la elección de los momentos.
+
+Más momentos no son necesariamente útiles en la práctica, estos deben ser económicamente relevantes para el modelo e informativos sobre los parámetros.
+
+# Pregunta 3
+Basado en Taylor et al. (2016).
+
+## Inciso A
+¿Cuáles son las diferencias entre un modelo LEWIE y uno de forma reducida?
+
+Normalmente los modelos de forma reducida y los LEWIE (Local Economy-wide Impact Evaluation) se utilizan de manera complementar. La principal diferencia de estos últimos con los de forma reducida es que consideran explícitamente los efectos spill-over (derrame) que en muchas realidades resultan inevitables sobre todo cuando un programa piloto se quiere implementar a grande escala donde se habrán efecto de equilibrio general con movimiento en demanda, oferta y precios. Estos modelos evalúan los impactos tanto directos como indirectos, considerando los vínculos de mercado que transmiten los efectos en las economías locales. Una de las ventajas de esto tipo de modelo es que no es necesario crear grupos de tratamiento y de control, ni escoger por lo tanto localidades distantes que pueden presentar diferencias no idiosincráticas, para evitar los efectos derrames que podrían invalidar el diseño experimental. 
+
+Además, permiten identificar efectos netos de intervenciones simultaneas. A diferencia de los modelos de forma reducidas, el setup del modelo resulta más complicado siendo que es necesario modelar los hogares y las empresas y combinarlos para crear un modelo de economías locales que será utilizado para simular el impacto.  En los LEWIE será por tanto necesario especificar problemas macroeconómicos de optimización para obtener funciones de gasto y producción a partir de microdatos que caractericen los patrones de gasto, insumos y lugares de intercambio.
+
+En general los modelos de forma reducida asumen que el tratamiento impacta solo en las unidades tratadas y necesitan un control en el diseño y en la implementación para lograr estimar de manera insesgada los impactos limitando además el análisis a una sola dimensión especifica y un solo canal de transmisión de la política pública sin modelar los comportamientos de los agentes involucrados que podrían generar efectos secundarios no considerados en la teoría del cambio del experimento.
+
+## Inciso B
+¿Cómo se modelan las decisiones de producción y consumo de los agentes relevantes?
+
+Para modelar las decisiones de producción y consumo de los agentes involucrados en la economía considerada en el artículo se construyó un sistema de ecuaciones que pudiera ser representativa de sus comportamientos. Antes que todo se definieron modelos microeconómicos distintos para los hogares productores tanto por los refugiados como por los agentes del país hospedador, adentro y afuera del campo. Las ecuaciones del modelo incluyeron la producción y la función de demanda de inputs, así como la función de gasto para cada grupo de hogares y las condiciones de vaciado del mercado local que determinan los precios de los bienes. 
+
+En la tabla que se presenta a continuación de autoría de los investigadores del artículo se ejemplifica las ecuaciones utilizada para describir los mecanismos de la economía y sus agentes:
+
+![alt text]( tabla_ecuaciones.PNG)
+
+Los valores de los parámetros de las ecuaciones fueron estimados por medio de microdatos obtenidos de encuestas a hogares en un radio de 10 km del campo de refugiados.
+
+## inciso C
+¿Cómo se define y estima el modelo en equilibrio?
+
+El equilibrio del modelo se defino por medio de la solución del sistema de ecuaciones microeconómicas definidas en el punto precedente. El resultado será un vector de precios, consumo y demanda que satisfacen el sistema y respetan las relativas restricciones y las condiciones de vaciado de los mercados. 
+
+Estos modelos integrados llevaron a una condición de equilibrio general, considerando como unidad de análisis los hogares en un radio de 10km del campamiento dada las condiciones de los transportes y de las infraestructuras, a partir de la cual se pudieron simular choques exógenos, por medio de simulaciones Montecarlo, para entender el efecto de un aumento del flujo migratorio en las economías locales relativas a los tres campamientos. Esto resultó en un efecto multiplicador que beneficiaba la economía.
+
+En general las estimaciones de LEWIE se obtiene a partir de un sistema de ecuaciones para los hogares (precios, producción, consumo e ingreso) y para las condiciones de equilibrio de mercado (mercado de bienes y de factores). Para la estimación es necesario, como vimos, usar los datos para encontrar los parámetros de las funciones de producción y de gasto para luego solucionar el modelo por medio de las condiciones de equilibrio obteniendo así los precios. 
+
+## Inciso D
+¿Cómo se realiza inferencia para determinar la significancia estadística de los efectos estimados?
+
+Al fine de obtener intervalos de confianza para las simulaciones a partir de la solución del equilibrio general se utilizó un método Montecarlo que realiza extracciones repetidas de todas las distribuciones de parámetros y, para cada extracción, recalibra el modelo base. Esto permitió generar múltiples (1,000) modelos base sobre los cuales simular el impacto de un refugiado adicional. 
+
+Los IC del 95% se crearon a partir del 95% promedio de la distribución de impactos simulados para cada resultado de interés. 
+Se utilizó un análisis de sensibilidad para probar la solidez de los resultados de la simulación a la elasticidad de la oferta laboral y las restricciones de liquidez y capital. En la tabla a continuación se reportaron los resultados de este análisis:
+
+![alt text]( sensitivity.PNG)
+
+# Pregunta 4
+
+Basado en Athey e Imbens (2019).
+
+## Inciso A
+¿Cuál es la diferencia entre machine learning y los modelos econométricos estándar?
+
+Provocativamente el estadístico Breiman sostenía que hay dos distintos y contrapuestos acercamientos al uso de los modelos estadísticos para llegar a conclusiones a partir de los datos. El primero (la estadística y la econometría) asume que los datos son generados de un proceso estocástico dado mientras el segundo (el Machine Learning) utiliza modelos de algoritmos y trata como desconocido el proceso que generó los datos. Aunque ya esta definición no puede ser aplicado en el campo de la estadística, siendo que la comunidad ya acepto el utilizo de los modelos ML quedan diferencias sustanciales entre los dos enfoques.
+
+En el acercamiento tradicional econométrico se define un estimador objetivo que está en función de una distribución conjunta de los datos. Los esfuerzos se concentran en este parámetro de un modelo estadístico que describe la distribución de un conjunto de variables, que a su vez típicamente son condicionadas a otras variables, en términos de un conjunto de parámetros, que puede ser finito o infinito. Dada una muestra aleatoria de una población de estudio, el parámetro de interés viene estimado encontrando el valor que mejor aproxima el de la muestra completa. 
+
+Solitamente para hacer esto se utiliza una función de error, como la suma de los cuadrados de los errores, o por medio de técnicas de máxima verosimilitud. El objetivo se centra en la calidad del estimador, sus propiedades asintóticas y su eficiencia en grandes muestras. Muchas veces se recurre también a la construcción de intervalos de confianza y se reportan los errores estándar que vienen obtenidos de manera robusta con diferentes técnicas.
+Al contrario, el ML se concentra en el desarrollo de algoritmos que puedan clasificar, prever o representar un conjunto de datos.
+
+Típicamente el objetivo es, a partir de un conjunto (grande) de datos, hacer una predicción sobre una variable o clasificarla con base a la limitada información a disposición. Por lo tanto, el enfoque es distinto, aunque hay áreas donde los dos campos se traslapan.
+
+## Inciso B
+¿Para qué sirven y en qué consisten las técnicas LASSO y de regresión ridge?
+
+Las técnicas LASSO (Least Absolute Shrinkage and Selection Operator) y de regression ridge permiten penalizar la complejidad de nuestro modelo impidiendo así problemas de sobreajuste, esto se debe a la característica intrínseca del ML de tomar decisiones data-driven que podrían llevar a crear modelos overfitted con bajas capacidades predictivas. Se utilizan sobre todo cuando el número de características observables es casi igual o mayor al numero de observaciones. 
+
+Estas dos técnicas, que se definen de regularización, introducen un término de penalización que reduce el $\beta_k$ hacia el cero y minimiza la siguiente función de error modificada:
+
+$$\beta_{q} =\arg         \min_{\beta}\sum_{i=1}^{N}(Y_i-X_i'\beta)^2+\lambda(||\beta||_q)^{1/q}$$
+
+Si $q=1$ tenemos un LASSO mientras con $q=2$ obtenemos una regresión ridge.
+
+Por lo tanto, este término de penalización que depende de la complejidad de l modelo resulta ser proporcional a la suma de los valores absolutos de los parámetros.
+
+Ambas técnicas tienen una interpretación Bayesiana pero hay algunas diferencias entre estas dos, la primera es que LASSO lleva a una solución donde el numero de coeficientes de regresión es exactamente igual a 0, una solución “escasa”. 
+
+Al contrario, con el estimador ridge todos los coeficientes estimados normalmente son distintos de cero. No siempre es necesario obtener una solución “escasa” y muchas veces hay sobre interpretación de los coeficientes distintos de cero.  
+
+## Inciso C
+¿En qué consisten los árboles de regresión y los bosques aleatorios?
+
+Los árboles de regresión y su extensión, los bosques aleatorios, son técnica de ML que se volvieron muy populares y efectivas desde un punto de vista metodológico para estimar con flexibilidad funciones de regresiones para datos donde el poder predictivo fuera de la muestra resulta importante. La idea a la base de estas técnicas es que dada una muestra esta viene divisa en submuestras y se estima la función de regresión en las submuestras simplemente como un promedio de los resultados. El proceso de subdivisión de la muestra es secuencial y se basa en un solo covariante $X_{ik}$ en el momento en que excede un valor umbral $c$. 
+
+A cada división el error promedio cuadrado se reduce o se mantiene. Por lo tanto, es necesario introducir unas reglas para evitar overfitting. Uno de esto, como vimos en las técnicas LASSO y ridge, es introducir un término de penalización a la suma de los residuales cuadrados que es linear al numero de hojas (submuestras). Una de las ventajas de un árbol es que sus resultados son fáciles de interpretar y explicar. 
+
+Una manera alternativa de interpretar un árbol de regresión es que representa una alternativa a la regresión kernel. Adentro de cada hoja la predicción es simplemente el promedio de los resultados en la hoja.
+
+Para una mejor estimación de $\mu (x)$ se pueden utilizar la técnica de bosque aleatorios. Uno de los puntos principales que intenta solucionar esta técnica respecto al utilizo de un árbol de regresión sencillo es que las estimaciones de este ultimo son discontinuas con saltos sustanciales. Las foresta aleatorias, promediando respecto a un gran numero de arboles permite suavizar la estimación limitando este problema. 
+
+Estos árboles difieren del original en cuanto son obtenidos por medio de una muestra Bootstrap y en cuanto las subdivisiones en cada fase no son optimizadas sobre todas las posible covariables sino en un subconjunto aleatorio de la mismas, que cambia para cada fase de división. La introducción de estas dos modificaciones permite obtener una varianza suficiente en los arboles que el promedio resulta suavizado. 
+
+Una de las ventajas de estas técnicas es que necesitan poco afinamiento para obtener buenos resultados, sobre todo en contextos donde hay muchas variables descriptivas poco correladas con la variable dependiente.
+
+## Inciso D
+¿Cómo puede emplearse machine learning para la estimación de efectos de tratamiento?
+
+Normalmente las técnicas de ML vienen utilizadas más para obtener previsiones que para identificar relaciones causales, objeto de interés de la evaluación de políticas públicas. Podemos pero utilizar técnicas de ML para estimar los efectos de tratamiento promedio (ATE). En particular las técnicas de ML nos permiten estimar el efecto potencial de un tratamiento sobre un individuo i bajo la hipótesis de inconfundibilidad el ATE puede ser caracterizado como una distribución conjunta de $(W_i,X_i,Y_i)$. En particular se puede estimar el ATE como la diferencia ajustada por covariables entre los brazos del tratamiento o como una media pesada de los resultados. Se puede por lo tanto en el primer caso estimar la media condicional esperada de la variable dependiente o, como en el segundo caso, por medio de un propensity score. 
+
+Dada estas dos representaciones resulta relevante definir la técnica con que estimar estos parámetros objetivos. En el primer caso es natural utilizar técnicas LASSO o de selección de la submuestra, aunque podrían dar resultados pocos precisos dado que omitiendo del conjunto de las variables observables de la regresión la que son fuertemente correladas con el tratamiento podría inducir un sesgo. Métodos mas recientes combinan la estimación del valor esperado potencial condicionado con el propensity score permitiendo así de llegar a modelos más flexibles y precisos donde hay un balance entre las covariables donde el procedimiento de optimización optimiza directamente los pesos para las observaciones que conducen a los mismos valores medios de covariables en los grupos de tratamiento y control. 
+
+Otras técnicas que vimos en clase es el utilizo de matrices que permiten estimar los diferentes outcomes potenciales. Finalmente, las técnicas de ML puede ser utilizadas para construir un contrafactual que permite evaluar el efecto promedio de un programa.
+
+# Pregunta 5
+
+Basado en Varían (2014)
+
+## Inciso A
+¿Qué es la predicción fuera de la muestra?
+
+Cuando construimos un predictor, sobre todo en caso de utilizo de técnicas de ML, es muy fácil obtener modelos sobre ajustados (overfitted) que logran muy buenos resultados en la muestra, pero tienen poco poder previsional fuera de esta. La predicción fuera de la muestra es justo el valor estimado de la variable dependiente $\hat y$ por parte del modelo dado una nueva $x$.
+
+## Inciso B
+¿A qué se refiere el problema de sobreajuste en la predicción?
+
+Cuando ajustamos demasiado el modelo al nuestro conjunto de predicción podemos incurrir en un problema de sobreajuste. En esto caso, dada una función de perdida, tendremos muy buenos resultados de aproximación a las observaciones de la muestra, pero perderemos capacidad predictiva. Por lo tanto, nuestro modelo obtendrá buenos resultados en caso de que las nuevas observaciones sean similares a las con la cuales entrenamos el algoritmo de ML pero pueden tener dificultades en encontrar $\hat y$ cuando las variables independientes que la generan $X$ son sustancialmente distintas de las que fueron consideradas para la definición de los parámetros de afinación.
+
+Una manera de lidiar con esta problemática es el utilizo de modelos mas sencillos utilizado funciones de evaluación que penalizan una excesiva complejidad de los modelos. Otro aspecto fundamental es la definición de los conjuntos de entrenamiento, validación y test. El primero nos permite estimar el modelo, el segundo escoger el modelo que mejor se desempeña y finalmente el test set nos permite averiguar y estimar el rendimiento del modelo elegido en la aproximación de nuevas observaciones.
+
+## Inciso C
+¿Cómo se puede evaluar el efecto de una campaña de publicidad en internet empleando las técnicas descritas en el texto?
+
+Una de las técnicas que sugieren se pueda emplear para evaluar el impacto de una campaña de publicidad en las visitas del sito asociado o en las ventas es la de serie de tiempo estructurales Bayesianas. La BSTS fueron creadas para lidiar con problemas de sobreajuste y relaciones espurias. Esto se debe al echo que sería demasiado costoso o complicado implementar un RCT por lo tanto es construir un modelo con BSTS, o con otros métodos y algoritmos, para predecir la variable objeto del análisis en función de las variables explicativas que consideramos relevantes prestando particular atención a elementos como la estacionalidad o el trend que resultan importantes en un contexto de series de tiempo. 
+
+Para escoger las variables independientes hay distintas técnicas de ML (Kernel PCA o Manifold) que nos pueden ayudar en encontrar las que explican mejor la varianza de los resultados. Sucesivamente se podría implemente la campaña por un periodo de tiempo corto y registrar los resultados utilizando las predicciones del modelo como contrafactual. 
+
+Las diferencias entre los resultados efectivamente registrados (visitas o ventas) y los estimados por el modelo pueden aproximar el impacto de la campaña publicitaria. El modelo estimará un intervalo de confianza para las predicciones de la variable dependiente así podríamos definir distintos impactos por diferentes escenarios. Con este método no utilizaremos un grupo de control convencional sino el contrafactual sino lo estimaremos por medio de un modelo de series de tiempo basado en efectos estacionales, extrapolación de tendencias y covariables relevantes.
+
+## Inciso D
+¿Cuál es la principal fuente de incertidumbre en el modelo en el contexto de big data?
+
+Problemas tradicionales econométricos como el sesgo de selección y la autoselección, que son relativos a la muestra, tienen menor relevancia en un contesto de Big Data donde las muestras son muy grandes. Resta, pero el problema relativo a la incertidumbre ligada a la elección del modelo empleado, que podría resultar mucho más relevante. En la econometría clásica lidiamos con este problema presentando distintas especificaciones y variables independientes, si los resultados resultan constantes estadísticamente podemos suponer que el modelo sea robusto y estime consistentemente el modelo en examen.  
+
+Esto resulta más complicado en un contexto de ML y Big Data donde tenemos un espacio de pertenencia de las variables observadas dimensionalmente mucho más grande. Resulta por lo tanto complicado tener certidumbre sobre el modelo a emplear para obtener buenas predicciones fuera de muestra. Esto se debe también al hecho que la mayoría de las técnicas son data-driven y por lo tanto no tienen interpretaciones estructurales. Una de las técnicas para minimizar esta incertidumbre es utilizar el promedio de las estimaciones hechas por distintos modelos que pueden basarse en distintos algoritmos y métodos de predicción. 
+
+En la literatura se encuentran numerosas pruebas que el utilizo del promedio de los resultados de distintos modelos lleva a mejores predicciones fuera de la muestra. Otra posibilidad es el utilizo de modelos “ensable” que combinan distintos modelos de forma estructurada. 
+
+[1]: Abadie, A., Diamond, A., & Hainmueller, J. (2010). Synthetic control methods for comparative case studies: Estimating the effect of California’s tobacco control program. Journal of the American statistical Association, 105(490), 493-505.
+
+
